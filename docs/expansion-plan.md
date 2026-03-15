@@ -53,7 +53,7 @@ graph TB
     subgraph Client["Browser (React 19)"]
         UI["Next.js App Router<br/>React Components"]
         Maps["Google Maps JS API"]
-        TripCtx["TripProvider Context<br/><b>SF-locked state</b>"]
+        TripCtx["TripProvider Context<br/><b>Multi-city state</b>"]
     end
 
     subgraph Backend["Convex Backend"]
@@ -719,7 +719,9 @@ Everything in Tier 2, plus:
 
 ## 17. Architecture Diagrams
 
-### Current Architecture (SF-Only)
+### Original Architecture (SF-Only, pre-expansion)
+
+> **Note:** This diagram shows the original single-city architecture before the multi-city refactor. See `docs/architecture.md` for the current state.
 
 ```mermaid
 graph LR

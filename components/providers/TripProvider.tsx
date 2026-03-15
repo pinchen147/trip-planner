@@ -1198,28 +1198,6 @@ export default function TripProvider({ children }: { children: ReactNode }) {
             infoWindowRef.current.open(mapRef.current);
           });
           regionPolygonsRef.current.push(polygon);
-          if (position) {
-            const detailText = pwp.tag === 'avoid'
-              ? place.crimeTypes || ''
-              : place.safetyLabel || place.safetyHighlights || 'Lower violent-crime profile';
-            const labelEl = document.createElement('div');
-            const isAvoidTag = pwp.tag === 'avoid';
-            const risk = place.risk || 'medium';
-            const isExtreme = risk === 'extreme';
-            const isHighRisk = risk === 'high';
-            const bgColor = isAvoidTag
-              ? (isExtreme ? 'rgba(255,68,68,0.25)' : isHighRisk ? 'rgba(255,68,68,0.18)' : 'rgba(255,68,68,0.10)')
-              : 'rgba(0,255,136,0.10)';
-            const textColor = isAvoidTag ? '#FFD6D6' : '#00FF88';
-            const borderColor = isAvoidTag ? 'rgba(255,68,68,0.4)' : 'rgba(0,255,136,0.3)';
-            const labelPrefix = isAvoidTag ? '⚠' : '✓';
-            labelEl.style.cssText = `font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${textColor};background:${bgColor};padding:3px 7px;border-radius:0;border:1px solid ${borderColor};white-space:nowrap;pointer-events:none;text-align:center;line-height:1.4;`;
-            labelEl.innerHTML = `${labelPrefix} ${escapeHtml(place.name)}${detailText ? `<br><span style="font-size:10px;font-weight:500;opacity:0.9">${escapeHtml(detailText)}</span>` : ''}`;
-            const labelMarker = new window.google.maps.marker.AdvancedMarkerElement({
-              map: mapRef.current, position, content: labelEl, gmpClickable: false, zIndex: isAvoidTag ? 40 : 25
-            });
-            markersRef.current.push(labelMarker);
-          }
         } else if (position) {
           const marker = new window.google.maps.marker.AdvancedMarkerElement({
             map: mapRef.current, position, title: place.name,

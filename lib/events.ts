@@ -5,6 +5,7 @@ import ical from 'node-ical';
 import { ConvexHttpClient } from 'convex/browser';
 import { getScopedConvexClient } from './convex-client-context.ts';
 import { validateIngestionSourceUrlForFetch } from './security-server.ts';
+import { extractSpotsFromUrl } from './firecrawl-spots.ts';
 
 const DOC_LOCATION_FILE = path.join(process.cwd(), 'docs', 'my_location.md');
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -604,6 +605,57 @@ async function loadStaticPlaces() {
   }
 }
 
+/**
+ * Discover spots for a city if none exist yet in Convex.
+ * Idempotent — returns cached data if spots already exist.
+ * Pass force=true to re-scrape even if spots are cached.
+ */
+export async function discoverSpotsIfNeeded(
+  cityId: string,
+  options?: { force?: boolean }
+): Promise<{ spotCount: number; syncedAt: string; errors: any[]; cached: boolean }> {
+  if (!cityId) {
+    return { spotCount: 0, syncedAt: '', errors: [], cached: false };
+  }
+
+  // Check if spots already exist
+  if (!options?.force) {
+    const existing = await loadSpotsFromConvex(cityId);
+    if (existing && existing.spots.length > 0) {
+      return {
+        spotCount: existing.spots.length,
+        syncedAt: existing.meta.syncedAt || '',
+        errors: [],
+        cached: true,
+      };
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const sourceSnapshot = await getSourceSnapshotForSync(cityId);
+  const spotSyncResult = await syncSpotsFromSources({
+    spotSources: sourceSnapshot.spotSources,
+  });
+
+  if (spotSyncResult.places.length > 0) {
+    await Promise.allSettled([
+      saveSpotsToConvex(cityId, {
+        spots: spotSyncResult.places,
+        syncedAt: nowIso,
+        sourceUrls: spotSyncResult.sourceUrls,
+      }),
+      saveSourceSyncStatus(sourceSnapshot.spotSources, spotSyncResult.errors, nowIso),
+    ]);
+  }
+
+  return {
+    spotCount: spotSyncResult.places.length,
+    syncedAt: nowIso,
+    errors: spotSyncResult.errors,
+    cached: false,
+  };
+}
+
 function getConvexUrl() {
   return process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL || '';
 }
@@ -1190,10 +1242,49 @@ async function syncEventsFromSources({ eventSources, rssFallbackStateBySourceUrl
 }
 
 async function syncSpotsFromSources({ spotSources }) {
+  const errors = [];
+  const allSpots = [];
+  const firecrawlApiKey = cleanText(process.env.FIRECRAWL_API_KEY);
+
+  for (const source of spotSources) {
+    const sourceValidation = await validateIngestionSourceUrlForFetch(source?.url);
+    if (!sourceValidation.ok) {
+      errors.push(createIngestionError({
+        sourceType: 'spot',
+        sourceId: source?.id,
+        sourceUrl: source?.url,
+        stage: 'source_validation',
+        message: sourceValidation.error
+      }));
+      continue;
+    }
+
+    if (!firecrawlApiKey) {
+      continue;
+    }
+
+    try {
+      const rawPlaces = await extractSpotsFromUrl(source.url, firecrawlApiKey);
+      const normalized = _normalizeSpots(rawPlaces, source);
+      allSpots.push(...normalized);
+    } catch (error) {
+      errors.push(createIngestionError({
+        sourceType: 'spot',
+        sourceId: source?.id,
+        sourceUrl: source?.url,
+        stage: 'firecrawl',
+        message: error instanceof Error ? error.message : 'Firecrawl extraction failed.'
+      }));
+    }
+  }
+
+  const deduped = _dedupeAndSortSpots(allSpots);
+  const withCoordinates = await _enrichPlacesWithCoordinates(deduped);
+
   return {
-    places: [],
+    places: withCoordinates,
     sourceUrls: spotSources.map((source) => source.url),
-    errors: []
+    errors
   };
 }
 

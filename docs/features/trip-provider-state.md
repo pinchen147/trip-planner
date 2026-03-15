@@ -47,7 +47,7 @@ ConvexAuthNextjsProvider  (components/providers/ConvexClientProvider.tsx)
 TripProvider is mounted in `app/trips/layout.tsx:6`:
 
 ```tsx
-export default function TabsLayout({ children }) {
+export default function TripsLayout({ children }) {
   return (
     <TripProvider>
       <AppShell>{children}</AppShell>

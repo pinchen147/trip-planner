@@ -58,8 +58,8 @@ Both REST route files export `runtime = 'nodejs'` (`app/api/trips/route.ts:4`, `
 | `convex/authz.ts` | Convex-side auth | `requireAuthenticatedUserId`, `requireOwnerUserId` | `@convex-dev/auth/server` | None |
 | `convex/tripConfig.ts` | Trip config CRUD | `getTripConfig`, `saveTripConfig` | `convex/authz` | DB insert/patch |
 | `convex/seed.ts` | City seeding | `seedInitialData`, `seedInitialDataInternal` | `convex/authz` | Inserts city records |
-| `lib/mock-data.ts` | UI mock types + data | `SelectedCity`, `Google Places predictions`, `Google Places predictions`, `formatTripDateRange` | None | None |
-| `components/CityPickerModal.tsx` | City selection modal | `CityPickerModal` | `lib/mock-data`, `components/ui/modal` | None |
+| `lib/mock-data.ts` | Trip type definitions + date formatting | `TripLeg`, `MockTrip`, `MOCK_TRIPS`, `formatTripDateRange` | None | None |
+| `components/CityPickerModal.tsx` | Google Places-powered city search | `CityPickerModal`, `SelectedCity` | `Modal`, `map-helpers`, `city-registry` | Google Maps script, Places API |
 | `app/dashboard/page.tsx` | Trip dashboard page | `DashboardPage` (default) | `CityPickerModal`, `lib/mock-data` | Fetches `/api/trips`, `/api/cities`; sets localStorage |
 | `components/TripSelector.tsx` | In-app trip switcher dropdown | `TripSelector` (default) | `TripProvider` | None |
 
@@ -487,7 +487,7 @@ node --test lib/trip-provider-bootstrap.test.mjs
 | Add trip sharing (beyond pair rooms) | New field on trips table (e.g., `sharedWith`), update `getTrip` access check |
 | Change cascade delete behavior | `convex/trips.ts:136-181` -- add/remove table cleanup in `deleteTrip` |
 | Change auth from dev bypass to production | Set `DEV_BYPASS_AUTH = false` in both `lib/request-auth.ts:5` and `convex/authz.ts:5` |
-| Add a city to the picker modal | `lib/mock-data.ts` -- add to `Google Places predictions` or `Google Places predictions` |
+| Add a seeded city | Add to `SEED_CITIES` in `convex/seed.ts` and `CITIES` in `lib/city-registry.ts` |
 | Change default trip date range on creation | `app/dashboard/page.tsx:97-99` -- currently today + 3 days |
 | Change active trip resolution priority | `components/providers/TripProvider.tsx:1302-1304` |
 | Make trip updates available to pair members | `convex/trips.ts:117` -- modify the ownership check to include pair member lookup |

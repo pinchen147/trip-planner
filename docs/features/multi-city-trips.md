@@ -41,7 +41,7 @@ Multi-City Trip Support allows users to create trips with one or more city "legs
 | Dashboard UI | `app/dashboard/page.tsx` | Trip grid with leg badges and create flow |
 | City picker modal | `components/CityPickerModal.tsx` | Used by dashboard to pick a city for new trips |
 | State management | `components/providers/TripProvider.tsx` | `switchTrip()`, `switchCityLeg()`, bootstrap logic |
-| Mock data types | `lib/mock-data.ts` | `TripLeg`, `MockTrip`, `SelectedCity` interfaces |
+| Type definitions | `lib/mock-data.ts`, `lib/types.ts` | `TripLeg`, `MockTrip` interfaces; shared type aliases |
 | Trip config | `convex/tripConfig.ts` | Per-trip timezone, start/end dates, base location |
 
 **Lifecycle boundary:** `TripProvider` wraps all protected routes. It bootstraps on mount (loads trips, cities, selects active trip/leg, initializes map). Trip/city switching happens in-memory via `switchTrip()` and `switchCityLeg()` without a full page reload.
@@ -58,13 +58,14 @@ Multi-City Trip Support allows users to create trips with one or more city "legs
 | `convex/tripConfig.ts` | Trip config | `getTripConfig`, `saveTripConfig` | `convex/authz` | None |
 | `convex/seed.ts` | Seed initial cities | `seedInitialData`, `seedInitialDataInternal` | `convex/authz` | Inserts into `cities` table |
 | `lib/city-registry.ts` | Static city catalog | `getCityEntry`, `getAllCityEntries` | None | None |
-| `lib/mock-data.ts` | Mock/type definitions | `TripLeg`, `MockTrip`, `SelectedCity`, `MOCK_TRIPS`, `formatTripDateRange` | None | None |
-| `app/api/trips/route.ts` | REST: list + create trips | `GET`, `POST` | `lib/request-auth`, `lib/city-registry` | Auto-creates cities in Convex |
+| `lib/mock-data.ts` | Trip type definitions + date formatting | `TripLeg`, `MockTrip`, `MOCK_TRIPS`, `formatTripDateRange` | None | None |
+| `app/api/trips/route.ts` | REST: list + create trips | `GET`, `POST` | `lib/request-auth`, `lib/city-registry` | Auto-creates cities via `ensureCity` |
 | `app/api/trips/[tripId]/route.ts` | REST: get/update/delete trip | `GET`, `PATCH`, `DELETE` | `lib/request-auth` | None |
 | `app/api/cities/route.ts` | REST: list + create cities | `GET`, `POST` | `lib/request-auth` | None |
+| `app/api/cities/timezone/route.ts` | Timezone lookup via Google TimeZone API | `GET` | Google TimeZone API | None |
 | `components/TripSelector.tsx` | Trip/city leg switcher | `TripSelector` (default) | `TripProvider` context | Click-outside listener |
 | `app/dashboard/page.tsx` | Trip dashboard | `DashboardPage` (default) | `CityPickerModal`, `lib/mock-data` | Fetches `/api/trips` + `/api/cities` |
-| `components/CityPickerModal.tsx` | City picker for new trips | `CityPickerModal` | `lib/mock-data`, `components/ui/modal` | None |
+| `components/CityPickerModal.tsx` | Google Places-powered city search | `CityPickerModal`, `SelectedCity` | `Modal`, `map-helpers`, `city-registry` | Google Maps script, Places API |
 | `components/providers/TripProvider.tsx` | Central state provider | `TripProvider`, `useTrip` | All API routes, Convex auth | Map init, event fetch, crime heatmap, planner persistence |
 
 ---
@@ -350,8 +351,8 @@ The dashboard's `handleCitySelect` creates trips with exactly one leg spanning t
 ### 9.7 No date overlap validation
 Neither `createTrip` nor `updateTrip` validates that leg date ranges don't overlap or are in chronological order. The legs array is stored exactly as provided.
 
-### 9.8 CityPickerModal uses static mock data
-`CityPickerModal.tsx` uses `Google Places predictions` and `Google Places predictions` from `lib/mock-data.ts`, not the real cities from Convex. This means the picker shows a fixed set of cities regardless of what's in the database.
+### 9.8 CityPickerModal uses Google Places API
+`CityPickerModal.tsx` searches cities worldwide via Google Places Autocomplete API. Any city found by Google can be selected and auto-provisioned in Convex. Crime heatmaps are only available for cities with a known crime adapter in `lib/city-registry.ts` (currently SF, NYC, LA, Chicago).
 
 ---
 
@@ -402,7 +403,7 @@ node --test lib/crime-cities.test.mjs
 
 | If you want to... | Edit... |
 |---|---|
-| Add a new supported city | `lib/city-registry.ts` (add entry to `CITIES` map), `convex/seed.ts` (add to `SEED_CITIES`), optionally `lib/mock-data.ts` (add to `Google Places predictions` or `Google Places predictions`) |
+| Add a new seeded city | `lib/city-registry.ts` (add entry to `CITIES` map) AND `convex/seed.ts` (add to `SEED_CITIES`). Any city can be added via Google Places search without code changes. |
 | Add fields to a trip leg | `convex/schema.ts:35-41` (schema), `convex/trips.ts:5-9` (validator), `lib/mock-data.ts:1-7` (TypeScript interface), `app/dashboard/page.tsx:10-14` (local interface) |
 | Validate leg date ordering | `convex/trips.ts:69-71` in `createTrip` handler and `:121-126` in `updateTrip` handler |
 | Remember last active leg per trip | `TripProvider.tsx:1692-1727` in `switchTrip()` -- store `{tripId: cityId}` mapping in state or localStorage |

@@ -54,7 +54,7 @@ app/trips/layout.tsx
 | `components/StatusBar.tsx` | Renders the bottom bar UI | `default` (StatusBar component) | `useTrip` from TripProvider | None |
 | `components/providers/TripProvider.tsx` | Owns `status`, `statusError`, `routeSummary` state; exposes `setStatusMessage` | `TripProvider`, `useTrip` | React context, Convex auth, Google Maps, fetch API | Network requests, map mutations, timers |
 | `components/AppShell.tsx` | Mounts StatusBar as last child in the layout shell | `default` (AppShell component) | StatusBar, MapPanel, TripSelector, useTrip | None |
-| `app/trips/layout.tsx` | Wraps children in TripProvider + AppShell | `default` (TabsLayout) | TripProvider, AppShell | None |
+| `app/trips/layout.tsx` | Wraps children in TripProvider + AppShell | `default` (TripsLayout) | TripProvider, AppShell | None |
 | `lib/helpers.ts` | `formatDistance`, `formatDurationFromSeconds` used for route summary text | Named exports | None | None |
 | `lib/planner-helpers.ts` | `MAX_ROUTE_STOPS` constant | Named exports | None | None |
 | `app/globals.css` | `--color-border`, `statusPulse` keyframe, theme tokens | CSS custom properties | Tailwind | None |

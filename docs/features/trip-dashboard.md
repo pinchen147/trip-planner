@@ -40,11 +40,11 @@ The dashboard page is mounted at `/dashboard` as a standalone Next.js App Router
 | File | Responsibility | Key Exports | Dependencies | Side Effects |
 |------|---------------|-------------|--------------|--------------|
 | `app/dashboard/page.tsx` | Dashboard page component | `DashboardPage` (default) | `CityPickerModal`, `Avatar`, `mock-data.formatTripDateRange` | Fetches `/api/trips` + `/api/cities` on mount; writes to `localStorage` |
-| `components/CityPickerModal.tsx` | City selection modal for trip creation | `CityPickerModal` | `Modal`, `Google Places predictions`, `Google Places predictions` | None |
+| `components/CityPickerModal.tsx` | Google Places-powered city search modal | `CityPickerModal`, `SelectedCity` | `Modal`, `map-helpers`, `city-registry` | Loads Google Maps script; calls Google Places & Geocoder APIs |
 | `components/ui/modal.tsx` | Generic portal-based modal | `Modal` | `react-dom/createPortal`, `lucide-react/X` | Portal into `document.body`; `keydown` listener for Escape |
 | `components/ui/avatar.tsx` | User avatar circle with initial | `Avatar` | None | None |
-| `lib/mock-data.ts` | Static city data + date formatting | `MockTrip`, `SelectedCity`, `MOCK_TRIPS`, `Google Places predictions`, `Google Places predictions`, `formatTripDateRange` | None | None |
-| `lib/city-registry.ts` | Authoritative city metadata registry | `CityEntry`, `getCityEntry`, `getAllCityEntries` | None | None |
+| `lib/mock-data.ts` | Trip type definitions + date formatting | `TripLeg`, `MockTrip`, `MOCK_TRIPS`, `formatTripDateRange` | None | None |
+| `lib/city-registry.ts` | Static city catalog with map/timezone/crime data | `CityEntry`, `getCityEntry`, `getAllCityEntries`, `toSlug`, `getCrimeAdapterIdForSlug` | None | None |
 | `app/api/trips/route.ts` | REST handler for trip CRUD | `GET`, `POST` | `request-auth`, `city-registry`, Convex `trips:*` | Auto-creates city records in Convex on trip creation |
 | `app/api/cities/route.ts` | REST handler for city listing/creation | `GET`, `POST` | `request-auth`, Convex `cities:*` | None |
 | `convex/trips.ts` | Convex trip queries/mutations | `listMyTrips`, `getTrip`, `createTrip`, `updateTrip`, `deleteTrip` | `convex/authz` | Creates `tripConfig` on trip creation; cascading delete |
@@ -373,7 +373,7 @@ node --test lib/dashboard.test.mjs
 
 | If you want to... | Edit... |
 |---|---|
-| Add a new city to the picker | Add entry to `Google Places predictions` or `Google Places predictions` in `lib/mock-data.ts`, and add matching entry to `lib/city-registry.ts` for auto-provisioning |
+| Add a seeded city | Add entry to `convex/seed.ts` `SEED_CITIES` and `lib/city-registry.ts` `CITIES` map with matching slug |
 | Change the trip card grid layout | Modify `gridTemplateColumns` at `app/dashboard/page.tsx:251` |
 | Change leg badge colors | Modify `LEG_COLORS` array at `app/dashboard/page.tsx:31` |
 | Change default new trip date range | Modify the `3 * 86400000` calculation at `app/dashboard/page.tsx:99` |

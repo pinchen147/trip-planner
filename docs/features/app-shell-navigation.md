@@ -26,7 +26,7 @@ The App Shell is the persistent chrome wrapping all authenticated (tab) routes. 
 RootLayout (app/layout.tsx)                    -- Server Component
   ConvexAuthNextjsServerProvider               -- auth session
     ConvexClientProvider                       -- Convex React client
-      TabsLayout (app/trips/layout.tsx)       -- Server Component (wraps protected tabs)
+      TripsLayout (app/trips/layout.tsx)       -- Server Component (wraps protected tabs)
         TripProvider                           -- client-side context (~85 KB)
           AppShell (components/AppShell.tsx)    -- client-side shell
             <header>                           -- top bar
@@ -43,7 +43,7 @@ RootLayout (app/layout.tsx)                    -- Server Component
 
 | Boundary | File | Behavior |
 |---|---|---|
-| Auth gate | `middleware.ts:8-15` | Routes `/map`, `/calendar`, `/planning`, `/spots`, `/config` are protected. Unauthenticated users redirect to `/signin`. (Currently bypassed with `DEV_BYPASS_AUTH = true`, line 18.) |
+| Auth gate | `middleware.ts:8-11` | Routes `/dashboard(.*)` and `/trips(.*)` are protected. Unauthenticated users redirect to `/signin`. Legacy bare tab routes (e.g., `/map`, `/planning`) redirect to `/dashboard` or `/trips/{tripId}/{tab}`. (Currently bypassed with `DEV_BYPASS_AUTH = true`, line 17.) |
 | TripProvider mount | `app/trips/layout.tsx:6` | Created once when any tab route loads. Destroyed only when navigating outside `trips/[tripId]` group. |
 | AppShell mount | `app/trips/layout.tsx:7` | Lives inside TripProvider; mounts/unmounts together. |
 | Dashboard | `app/dashboard/page.tsx` | Has its **own** header bar (not AppShell). Selecting a trip navigates to `/trips/{urlId}/map`, which enters the `trips/[tripId]` layout group and mounts AppShell. |
@@ -55,7 +55,7 @@ RootLayout (app/layout.tsx)                    -- Server Component
 | `/` | RootLayout only | LandingContent (no shell) |
 | `/signin` | RootLayout + signin layout | No shell |
 | `/dashboard` | RootLayout only | Own header (not AppShell) |
-| `/map`, `/calendar`, `/planning`, `/spots`, `/config` | RootLayout + TabsLayout | AppShell |
+| `/trips/{urlId}/map`, `/trips/{urlId}/calendar`, etc. | RootLayout + TripsLayout | AppShell |
 
 ---
 
@@ -64,7 +64,7 @@ RootLayout (app/layout.tsx)                    -- Server Component
 | File | Responsibility | Key Exports | Dependencies | Side Effects |
 |---|---|---|---|---|
 | `components/AppShell.tsx` | Top bar, grid layout, map panel toggle, status bar composition | `default` (AppShell) | TripProvider (`useTrip`), MapPanel, StatusBar, TripSelector, lucide-react, next/navigation | None |
-| `app/trips/layout.tsx` | Wraps tab routes with TripProvider + AppShell | `default` (TabsLayout) | TripProvider, AppShell | None |
+| `app/trips/layout.tsx` | Wraps tab routes with TripProvider + AppShell | `default` (TripsLayout) | TripProvider, AppShell | None |
 | `components/TripSelector.tsx` | Dropdown for trip + city leg switching | `default` (TripSelector) | TripProvider (`useTrip`), lucide-react | DOM event listener (`mousedown` for click-outside) |
 | `components/StatusBar.tsx` | Bottom status strip | `default` (StatusBar) | TripProvider (`useTrip`) | None |
 | `components/MapPanel.tsx` | Map container + filter chips + crime overlay | `default` (MapPanel) | TripProvider (`useTrip`), lucide-react | None (map init is in TripProvider) |
@@ -78,14 +78,16 @@ RootLayout (app/layout.tsx)                    -- Server Component
 
 ### Navigation state
 
-Navigation state is derived from the URL pathname, not stored in component state. The `activeId` is computed on every render.
+Navigation state is derived from the URL pathname, not stored in component state. The `activeId` is computed on every render from the URL segments.
 
 ```
-// components/AppShell.tsx:30
-const activeId = NAV_ITEMS.find((n) => pathname.startsWith(n.href))?.id || 'planning';
+// components/AppShell.tsx:30-32
+const segments = pathname.split('/');
+// /trips/{urlId}/{tab} -> tab is segments[3]
+const activeId = segments[3] || 'map';
 ```
 
-Fallback: if no tab matches the current path, `'planning'` is used as the default active tab.
+Fallback: if no tab segment exists in the URL, `'map'` is used as the default active tab.
 
 ### Map visibility state
 

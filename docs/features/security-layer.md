@@ -546,7 +546,7 @@ Authentication Provider: Resend passwordless magic links
 
 Middleware Layer:
   middleware.ts -> convexAuthNextjsMiddleware
-  Protected routes: /dashboard, /map, /calendar, /planning, /spots, /config
+  Protected routes: /dashboard(.*), /trips(.*)
   Public routes: /, /landing, /signin
 
 API Route Layer:

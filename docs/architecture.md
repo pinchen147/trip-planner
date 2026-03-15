@@ -51,7 +51,7 @@ graph TB
 
     subgraph Vercel["Vercel Edge + Serverless"]
         MW["Middleware<br/>(Auth Guard)"]
-        API["Next.js API Routes<br/>(11 endpoints)"]
+        API["Next.js API Routes<br/>(14 endpoints)"]
         SSR["Server Components<br/>(Landing, OG Images)"]
     end
 
@@ -506,7 +506,7 @@ graph LR
 
 ### 5.2 Next.js API Routes
 
-All 11 endpoints with their contracts:
+All 14 endpoints with their contracts:
 
 ```mermaid
 graph TD
@@ -1318,7 +1318,7 @@ graph TB
 
     subgraph "Convex Cloud"
         ConvexRT["Convex Runtime<br/>Queries, Mutations, Auth"]
-        ConvexDB["Convex Database<br/>12 tables + auth tables"]
+        ConvexDB["Convex Database<br/>15 tables + auth tables"]
     end
 
     subgraph "External"

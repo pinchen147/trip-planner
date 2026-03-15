@@ -1,5 +1,6 @@
 import { requireAuthenticatedClient } from '@/lib/request-auth';
 import { getCrimeAdapterIdForSlug } from '@/lib/city-registry';
+import { discoverSpotsIfNeeded } from '@/lib/events';
 
 export const runtime = 'nodejs';
 
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
       name: String(body.name || '').trim(),
       legs,
     });
+
+    // Fire-and-forget: auto-discover spots for each city in the trip
+    const cityIds = [...new Set(legs.map((l: any) => l.cityId).filter(Boolean))];
+    Promise.allSettled(
+      cityIds.map((cityId) => discoverSpotsIfNeeded(cityId).catch(() => {}))
+    );
+
     return Response.json({ trip });
   } catch (error) {
     return Response.json(

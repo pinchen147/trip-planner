@@ -328,19 +328,17 @@ These truths must hold after any refactor:
 
 ## 9. Edge Cases & Pitfalls
 
-### Data mismatch between mock and registry
+### Google Places API key required
 
-The `Google Places predictions` and `Google Places predictions` arrays in `lib/mock-data.ts` are **not automatically synced** with `lib/city-registry.ts`. If a city slug in mock data does not exist in the city registry, `getCityEntry()` returns `undefined`, the `if (!cityEntry) continue` guard skips auto-provisioning, and the trip is created with a `cityId` that has no corresponding city record. This degrades the dashboard display (city name falls back to the raw slug in `getCityDisplayName`).
+The CityPickerModal fetches the Google Maps API key from `GET /api/config`. If `GOOGLE_MAPS_BROWSER_KEY` is not configured, the modal displays an error message and city search is unavailable.
 
-**Currently safe slugs** (present in both mock-data and city-registry): `san-francisco`, `london`, `tokyo`, `paris`, `new-york`, `barcelona`.
+### Timezone resolution failure
 
-### Timezone inconsistency
+If the `/api/cities/timezone` call fails (e.g., Google TimeZone API quota exceeded), the timezone falls back to `'UTC'`. This affects planner scheduling accuracy for that city.
 
-`Google Places predictions` uses timezone abbreviations (`EST`, `CET`) while `lib/city-registry.ts` uses IANA identifiers (`America/New_York`, `Europe/Madrid`). The city registry value is authoritative -- mock timezone strings are only used for display in the modal.
+### Unknown crime adapter
 
-### Empty search with footer button
-
-If the user has typed a query that produces zero results and clicks "ADD DESTINATION", `filtered[0]` is `undefined`, so `onSelect` is not called. The modal still closes, resulting in no action taken. No error is displayed to the user.
+For cities not in the `lib/city-registry.ts` catalog, `getCrimeAdapterIdForSlug()` returns an empty string. Crime heatmaps will not be available for those cities.
 
 ### Default trip date range
 
@@ -396,17 +394,14 @@ node --test lib/dashboard.test.mjs
 
 | If you want to... | Edit... | Notes |
 |---|---|---|
-| Add a new city to the picker | `lib/mock-data.ts` (add to `Google Places predictions` or `Google Places predictions`) AND `lib/city-registry.ts` (add `CityEntry`) | Slugs must match between both files. Also add to `convex/seed.ts` if you want it seeded. |
-| Change popular destinations count | `lib/mock-data.ts:63` (`Google Places predictions` array) | Grid is `grid-cols-2`, so even numbers look best. |
+| Add a seeded city | `convex/seed.ts` (add to `SEED_CITIES`) AND `lib/city-registry.ts` (add to `CITIES`) | Slugs must match between both files. |
+| Add crime data for a new city | `lib/crime-cities.ts` (add config) AND `lib/city-registry.ts` (set `crimeAdapterId`) | Requires a Socrata open data portal with incident data. |
 | Change modal dimensions | `components/ui/modal.tsx:35` | Modify `max-w-[560px]` and `max-h-[720px]`. |
-| Add enter/exit animations | `components/ui/modal.tsx` | Currently no animation. Add CSS transitions or framer-motion around the portal content. |
-| Switch to server-side search | Replace `Google Places predictions.filter()` in `components/CityPickerModal.tsx:17-22` with a `fetch` call (debounced). Remove static imports. |
-| Add multi-city selection | Add local state for selected cities array in `CityPickerModal.tsx`. Change `onSelect` signature to accept `SelectedCity[]`. Update footer button to pass the array. |
+| Change search debounce delay | `components/CityPickerModal.tsx:110` | Currently 300ms. |
+| Add multi-city selection | Add local state for selected cities array in `CityPickerModal.tsx`. Change `onSelect` signature to accept `SelectedCity[]`. |
 | Change the default trip duration | `app/dashboard/page.tsx:99` | Currently `3 * 86400000` (3 days). |
-| Add keyboard navigation to city list | `components/CityPickerModal.tsx` | Add `onKeyDown` handler for ArrowUp/ArrowDown with focused index state. Add `aria-activedescendant`. |
-| Change the accent color of "ADD DESTINATION" button | `components/CityPickerModal.tsx:55` | Currently `#00E87B`. Design system accent is `--color-accent: #00FF88` in `globals.css`. |
-| Add city images to popular destinations | `lib/mock-data.ts:63-68` | Fill in `imageUrl` fields. Update `CityPickerModal.tsx:119-121` to render `<img>` instead of the placeholder `div`. |
-| Close modal without portal | Replace `createPortal` in `components/ui/modal.tsx:27` | Not recommended -- overlay click detection depends on portal positioning. |
+| Add keyboard navigation to results | `components/CityPickerModal.tsx` | Add `onKeyDown` handler for ArrowUp/ArrowDown with focused index state. |
+| Change the locale resolution | `components/CityPickerModal.tsx:26-31` | Edit `COUNTRY_TO_LOCALE` map. |
 
 ---
 

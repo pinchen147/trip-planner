@@ -25,7 +25,7 @@ The Day List Sidebar is a narrow, scrollable vertical column that displays all t
 ### Component tree
 
 ```
-TabsLayout (app/trips/layout.tsx)
+TripsLayout (app/trips/layout.tsx)
   TripProvider               -- context boundary
     AppShell                 -- top bar + map + children slot
       PlanningPage | SpotsPage
