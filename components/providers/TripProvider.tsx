@@ -931,6 +931,31 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     });
   }, [authUserId, selectedDate, setStatusMessage]);
 
+  const addCustomPlanItem = useCallback((startMinutes: number, endMinutes: number, title = 'New Plan') => {
+    if (!selectedDate) return '';
+    const id = createPlanId();
+    setPlannerByDateMine((prev) => {
+      const current = Array.isArray(prev[selectedDate]) ? prev[selectedDate] : [];
+      const next = sortPlanItems([...current, {
+        id, kind: 'place' as const, sourceKey: id,
+        title, locationText: '', link: '', tag: '',
+        startMinutes, endMinutes, ownerUserId: authUserId
+      }]);
+      return { ...prev, [selectedDate]: next };
+    });
+    return id;
+  }, [authUserId, selectedDate]);
+
+  const updatePlanItem = useCallback((itemId: string, updates: { title?: string; locationText?: string }) => {
+    if (!selectedDate) return;
+    setPlannerByDateMine((prev) => {
+      const current = Array.isArray(prev[selectedDate]) ? prev[selectedDate] : [];
+      return { ...prev, [selectedDate]: current.map((item) =>
+        item.id === itemId ? { ...item, ...updates } : item
+      )};
+    });
+  }, [selectedDate]);
+
   const removePlanItem = useCallback((itemId) => {
     if (!selectedDate) return;
     setPlannerByDateMine((prev) => {
@@ -1878,7 +1903,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('tripPlanner:activeTripId');
     }
     const nextUrlId = remaining.length > 0 ? (remaining[0].urlId || remaining[0]._id || remaining[0].id) : '';
-    window.location.href = nextUrlId ? `/trips/${nextUrlId}/map` : '/dashboard';
+    window.location.href = nextUrlId ? `/trips/${nextUrlId}/planning` : '/dashboard';
 
     // Fire-and-forget deletion in the background
     fetch(`/api/trips/${encodeURIComponent(tripIdToDelete)}`, { method: 'DELETE' }).catch(() => {});
@@ -1924,7 +1949,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     handleCreateSource, handleToggleSourceStatus, handleDeleteSource, handleSyncSource,
     handleSaveTripDates, handleSaveBaseLocation, handleUpdateTripLegs,
     handleExportPlannerIcs, handleAddDayPlanToGoogleCalendar,
-    addEventToDayPlan, addPlaceToDayPlan, removePlanItem, clearDayPlan, startPlanDrag,
+    addEventToDayPlan, addPlaceToDayPlan, addCustomPlanItem, updatePlanItem, removePlanItem, clearDayPlan, startPlanDrag,
     shiftCalendarMonth,
     renderCurrentSelection,
     switchTrip, switchCityLeg,
