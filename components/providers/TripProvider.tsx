@@ -1858,7 +1858,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, [currentCityId, cities, loadSourcesFromServer]);
 
-  const handleUpdateTripLegs = useCallback(async (legs: { cityId: string; startDate: string; endDate: string }[]) => {
+  const handleUpdateTripLegs = useCallback(async (legs: { cityId: string; startDate: string; endDate: string; stays?: { name: string; address: string; startDate: string; endDate: string }[] }[]) => {
     if (!currentTripId || !requireOwnerClient()) {
       throw new Error('Owner role is required.');
     }

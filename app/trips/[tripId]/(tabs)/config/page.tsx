@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Check, Copy, Trash2 } from 'lucide-react';
+import { RefreshCw, Check, Copy, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -32,7 +32,6 @@ export default function ConfigPage() {
     isSavingSource, syncingSourceId,
     handleCreateSource, handleToggleSourceStatus, handleDeleteSource, handleSyncSource,
     tripStart, tripEnd, handleSaveTripDates,
-    baseLocationText, handleSaveBaseLocation,
     setStatusMessage, timezone
   } = useTrip();
 
@@ -41,13 +40,10 @@ export default function ConfigPage() {
   const [localTripStart, setLocalTripStart] = useState(tripStart);
   const [localTripEnd, setLocalTripEnd] = useState(tripEnd);
   const [dateSaveState, setDateSaveState] = useState('idle');
-  const [localBaseLocation, setLocalBaseLocation] = useState(baseLocationText);
-  const [_locationSaveState, setLocationSaveState] = useState('idle');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const pairTimerRef = useRef<any>(null);
   const dateTimerRef = useRef<any>(null);
-  const locationTimerRef = useRef<any>(null);
 
   // Per-leg dates
   const currentTrip = trips.find((t) => (t._id || t.id) === currentTripId);
@@ -57,17 +53,16 @@ export default function ConfigPage() {
   const [legSaveState, setLegSaveState] = useState('idle');
   const legTimerRef = useRef<any>(null);
 
-  const legsKey = tripLegs.map((l) => `${l.cityId}:${l.startDate}:${l.endDate}`).join(',');
+  const legsKey = JSON.stringify(tripLegs.map((l) => ({ cityId: l.cityId, startDate: l.startDate, endDate: l.endDate, stays: l.stays })));
   useEffect(() => {
     if (currentTrip?.legs) {
-      setLocalLegs(currentTrip.legs.map((l) => ({ ...l })));
+      setLocalLegs(currentTrip.legs.map((l) => ({ ...l, stays: l.stays ? l.stays.map((s) => ({ ...s })) : undefined })));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [legsKey]);;
+  }, [legsKey]);
 
   useEffect(() => { setLocalTripStart(tripStart); }, [tripStart]);
   useEffect(() => { setLocalTripEnd(tripEnd); }, [tripEnd]);
-  useEffect(() => { setLocalBaseLocation(baseLocationText); }, [baseLocationText]);
   useEffect(() => {
     if (!currentPairRoomId) {
       setRoomCodeInput('');
@@ -169,17 +164,28 @@ export default function ConfigPage() {
     setLocalLegs((prev) => prev.map((leg, i) => i === index ? { ...leg, [field]: value } : leg));
   };
 
-  const onSaveLocation = async (event) => {
-    event.preventDefault();
-    setLocationSaveState('saving');
-    try {
-      await handleSaveBaseLocation(localBaseLocation);
-      setLocationSaveState('saved');
-      clearTimeout(locationTimerRef.current);
-      locationTimerRef.current = setTimeout(() => setLocationSaveState('idle'), 2000);
-    } catch {
-      setLocationSaveState('idle');
-    }
+  const addStay = (legIndex: number) => {
+    setLocalLegs((prev) => prev.map((leg, i) => {
+      if (i !== legIndex) return leg;
+      const stays = leg.stays || [];
+      return { ...leg, stays: [...stays, { name: '', address: '', startDate: leg.startDate, endDate: leg.endDate }] };
+    }));
+  };
+
+  const updateStay = (legIndex: number, stayIndex: number, field: string, value: string) => {
+    setLocalLegs((prev) => prev.map((leg, i) => {
+      if (i !== legIndex) return leg;
+      const stays = (leg.stays || []).map((s, si) => si === stayIndex ? { ...s, [field]: value } : s);
+      return { ...leg, stays };
+    }));
+  };
+
+  const removeStay = (legIndex: number, stayIndex: number) => {
+    setLocalLegs((prev) => prev.map((leg, i) => {
+      if (i !== legIndex) return leg;
+      const stays = (leg.stays || []).filter((_, si) => si !== stayIndex);
+      return { ...leg, stays };
+    }));
   };
 
   const renderSourceCard = (source) => {
@@ -280,45 +286,167 @@ export default function ConfigPage() {
               <form className="flex flex-col gap-3" onSubmit={onSaveDates}>
                 {isMultiLeg ? (
                   /* Per-leg date editing for multi-city trips */
-                  <div className="flex flex-col gap-3">
-                    {localLegs.map((leg, i) => {
+                  <div className="flex flex-col gap-5">
+                    {[...localLegs.map((leg, i) => ({ leg, i }))]
+                      .sort((a, b) => (a.leg.startDate || '').localeCompare(b.leg.startDate || ''))
+                      .map(({ leg, i }, displayIndex, sorted) => {
                       const city = cities.find((c) => c.slug === leg.cityId);
                       const cityName = city?.name || leg.cityId;
+                      const stays = leg.stays || [];
                       return (
-                        <div key={`${leg.cityId}-${i}`} className="flex flex-col gap-2 pb-3" style={{ borderBottom: i < localLegs.length - 1 ? '1px solid #1A1A1A' : 'none' }}>
-                          <span className="text-[10px] font-semibold uppercase text-accent" style={{ letterSpacing: 0.5, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}>
-                            LEG {i + 1} · {cityName}
-                          </span>
-                          <DateRangePicker
-                            startDate={leg.startDate}
-                            endDate={leg.endDate}
-                            onChange={(s, e) => {
-                              updateLegDate(i, 'startDate', s);
-                              updateLegDate(i, 'endDate', e);
-                            }}
-                            compact
-                          />
+                        <div key={`${leg.cityId}-${i}`} className="flex flex-col gap-3 pb-4" style={{ borderBottom: displayIndex < sorted.length - 1 ? '1px solid #1A1A1A' : 'none' }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-semibold uppercase text-accent shrink-0" style={{ letterSpacing: 0.5, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}>
+                              LEG {displayIndex + 1} · {cityName}
+                            </span>
+                            <DateRangePicker
+                              startDate={leg.startDate}
+                              endDate={leg.endDate}
+                              onChange={(s, e) => {
+                                updateLegDate(i, 'startDate', s);
+                                updateLegDate(i, 'endDate', e);
+                              }}
+                              compact
+                              triggerFontSize={15}
+                              triggerColor="#F5F5F5"
+                              hideIcon
+                            />
+                          </div>
+                          {/* Stays */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-semibold uppercase text-[#525252]" style={{ letterSpacing: 1, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}>STAYS</span>
+                            <button
+                              type="button"
+                              onClick={() => addStay(i)}
+                              className="flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                              style={{ fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)", fontSize: 9, fontWeight: 600, color: '#00E87B', letterSpacing: 0.5 }}
+                            >
+                              + ADD STAY
+                            </button>
+                          </div>
+                          {stays.length > 0 && (
+                            <div className="flex flex-col gap-1.5">
+                              {stays.map((stay, si) => (
+                                <div key={si} className="flex items-center gap-3 px-3.5 py-2.5" style={{ background: '#111111', border: '1px solid #1f1f1f' }}>
+                                  <div className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                                  <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                    <Input
+                                      type="text"
+                                      className="text-[13px] text-[#F5F5F5] border-none bg-transparent p-0 min-h-0"
+                                      value={stay.name}
+                                      onChange={(e) => updateStay(i, si, 'name', e.target.value)}
+                                      placeholder="Stay name"
+                                    />
+                                    <Input
+                                      type="text"
+                                      className="text-[10px] text-[#525252] border-none bg-transparent p-0 min-h-0"
+                                      value={stay.address}
+                                      onChange={(e) => updateStay(i, si, 'address', e.target.value)}
+                                      placeholder="Address"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                    <DateRangePicker
+                                      startDate={stay.startDate}
+                                      endDate={stay.endDate}
+                                      onChange={(s, e) => {
+                                        updateStay(i, si, 'startDate', s);
+                                        updateStay(i, si, 'endDate', e);
+                                      }}
+                                      compact
+                                      triggerFontSize={10}
+                                      triggerColor="#F5F5F5"
+                                      hideIcon
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeStay(i, si)}
+                                    className="bg-transparent border-none cursor-pointer p-0 text-[#3a3a3a] hover:text-[#F5F5F5] transition-colors shrink-0"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 ) : (
                   /* Single-leg date editing */
-                  <DateRangePicker
-                    startDate={localTripStart}
-                    endDate={localTripEnd}
-                    onChange={(s, e) => {
-                      setLocalTripStart(s);
-                      setLocalTripEnd(e);
-                    }}
-                    compact
-                  />
+                  <div className="flex flex-col gap-3">
+                    <DateRangePicker
+                      startDate={localTripStart}
+                      endDate={localTripEnd}
+                      onChange={(s, e) => {
+                        setLocalTripStart(s);
+                        setLocalTripEnd(e);
+                      }}
+                      compact
+                    />
+                    {/* Stays for single leg */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-semibold uppercase text-[#525252]" style={{ letterSpacing: 1, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}>STAYS</span>
+                      <button
+                        type="button"
+                        onClick={() => addStay(0)}
+                        className="flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                        style={{ fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)", fontSize: 9, fontWeight: 600, color: '#00E87B', letterSpacing: 0.5 }}
+                      >
+                        + ADD STAY
+                      </button>
+                    </div>
+                    {(localLegs[0]?.stays || []).length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {(localLegs[0]?.stays || []).map((stay, si) => (
+                          <div key={si} className="flex items-center gap-3 px-3.5 py-2.5" style={{ background: '#111111', border: '1px solid #1f1f1f' }}>
+                            <div className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                            <div className="flex flex-col gap-1 flex-1 min-w-0">
+                              <Input
+                                type="text"
+                                className="text-[13px] text-[#F5F5F5] border-none bg-transparent p-0 min-h-0"
+                                value={stay.name}
+                                onChange={(e) => updateStay(0, si, 'name', e.target.value)}
+                                placeholder="Stay name"
+                              />
+                              <Input
+                                type="text"
+                                className="text-[10px] text-[#525252] border-none bg-transparent p-0 min-h-0"
+                                value={stay.address}
+                                onChange={(e) => updateStay(0, si, 'address', e.target.value)}
+                                placeholder="Address"
+                              />
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5 shrink-0">
+                              <DateRangePicker
+                                startDate={stay.startDate}
+                                endDate={stay.endDate}
+                                onChange={(s, e) => {
+                                  updateStay(0, si, 'startDate', s);
+                                  updateStay(0, si, 'endDate', e);
+                                }}
+                                compact
+                                triggerFontSize={10}
+                                triggerColor="#F5F5F5"
+                                hideIcon
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeStay(0, si)}
+                              className="bg-transparent border-none cursor-pointer p-0 text-[#3a3a3a] hover:text-[#F5F5F5] transition-colors shrink-0"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <label className="text-[10px] font-semibold uppercase text-[#525252] shrink-0 w-16" style={{ letterSpacing: 0.5, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}>BASE</label>
-                  <Input type="text" value={localBaseLocation} onChange={(event) => setLocalBaseLocation(event.target.value)} placeholder="e.g. 1100 California St, SF" />
-                </div>
-                <Button type="submit" size="sm" className="w-full" disabled={!canManageGlobal || dateSaveState === 'saving' || legSaveState === 'saving'} onClick={(e) => { onSaveDates(e); onSaveLocation(e); }}>
+                <Button type="submit" size="sm" className="w-full" disabled={!canManageGlobal || dateSaveState === 'saving' || legSaveState === 'saving'} onClick={onSaveDates}>
                   {(dateSaveState === 'saving' || legSaveState === 'saving') ? 'Saving...' : (dateSaveState === 'saved' || legSaveState === 'saved') ? <><Check size={14} />Saved</> : 'SAVE CHANGES'}
                 </Button>
               </form>

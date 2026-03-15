@@ -23,6 +23,9 @@ interface DateRangePickerProps {
   startPlaceholder?: string;
   endPlaceholder?: string;
   compact?: boolean; // single month for small spaces
+  triggerFontSize?: number;
+  triggerColor?: string;
+  hideIcon?: boolean;
 }
 
 function parseDate(s: string): Date | null {
@@ -85,6 +88,9 @@ export function DateRangePicker({
   startPlaceholder = 'Check in',
   endPlaceholder = 'Check out',
   compact = false,
+  triggerFontSize,
+  triggerColor,
+  hideIcon = false,
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<SelectionPhase>('start');
@@ -233,7 +239,6 @@ export function DateRangePicker({
               textColor = '#0A0A0A';
               fontWeight = 600;
             } else if (inRange) {
-              rangeBg = 'rgba(0, 232, 123, 0.08)';
               textColor = '#00E87B';
               fontWeight = 500;
             } else if (isToday) {
@@ -316,23 +321,23 @@ export function DateRangePicker({
           className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer px-2 py-1.5 transition-all duration-150"
           style={{
             fontFamily: mono,
-            fontSize: 11,
-            color: startDate ? '#a3a3a3' : '#3a3a3a',
+            fontSize: triggerFontSize || 11,
+            color: startDate ? (triggerColor || '#a3a3a3') : '#3a3a3a',
             borderBottom: open && phase === 'start' ? '2px solid #00E87B' : '2px solid transparent',
           }}
         >
-          <Calendar size={12} style={{ color: '#525252', flexShrink: 0 }} />
+          {!hideIcon && <Calendar size={12} style={{ color: '#525252', flexShrink: 0 }} />}
           {startDate ? formatDisplay(startDate) : startPlaceholder}
         </button>
-        <span style={{ color: '#333', fontSize: 11, fontFamily: mono, userSelect: 'none' }}>—</span>
+        <span style={{ color: '#333', fontSize: triggerFontSize || 11, fontFamily: mono, userSelect: 'none' }}>—</span>
         <button
           type="button"
           onClick={() => open && phase === 'end' ? setOpen(false) : handleOpen('end')}
           className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer px-2 py-1.5 transition-all duration-150"
           style={{
             fontFamily: mono,
-            fontSize: 11,
-            color: endDate ? '#a3a3a3' : '#3a3a3a',
+            fontSize: triggerFontSize || 11,
+            color: endDate ? (triggerColor || '#a3a3a3') : '#3a3a3a',
             borderBottom: open && phase === 'end' ? '2px solid #00E87B' : '2px solid transparent',
           }}
         >

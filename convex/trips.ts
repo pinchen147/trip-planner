@@ -2,10 +2,18 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { requireAuthenticatedUserId } from './authz';
 
+const stayValidator = v.object({
+  name: v.string(),
+  address: v.string(),
+  startDate: v.string(),
+  endDate: v.string(),
+});
+
 const tripLegValidator = v.object({
   cityId: v.string(),
   startDate: v.string(),
   endDate: v.string(),
+  stays: v.optional(v.array(stayValidator)),
 });
 
 const tripValidator = v.object({

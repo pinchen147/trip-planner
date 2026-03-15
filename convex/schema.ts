@@ -38,6 +38,14 @@ export default defineSchema({
         cityId: v.string(),
         startDate: v.string(),
         endDate: v.string(),
+        stays: v.optional(v.array(
+          v.object({
+            name: v.string(),
+            address: v.string(),
+            startDate: v.string(),
+            endDate: v.string(),
+          })
+        )),
       })
     ),
     createdAt: v.string(),
