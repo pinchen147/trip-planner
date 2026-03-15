@@ -1,5 +1,7 @@
 # Design Guide — Industrial Terminal
 
+> **Last Updated:** 2026-03-15
+
 Dark-mode, developer-focused aesthetic. Monospace typography, neon green accents, sharp corners, zero decoration.
 
 ---
@@ -263,3 +265,88 @@ Bracket notation: `[ACTIVE]`, `[PENDING]`, `[OK]`, `[ERROR]`
 - Don't use lowercase for UI labels
 - Don't overuse green — reserve for interactive/success
 - Don't add accent colors beyond green/orange/red
+
+---
+
+## New Components (Post-Redesign)
+
+### EmptyState (`components/EmptyState.tsx`)
+
+Reusable empty state card with icon, title, description, and optional CTA button.
+- Background: `#0A0A0A`, min-height 160px
+- Icon: 28px, `#333`
+- Title: 12px JetBrains Mono, semibold, uppercase, `#444`
+- Description: 11px JetBrains Mono, `#333`
+- CTA: green primary button style
+
+### ErrorState (`components/ErrorState.tsx`)
+
+Three variants: `connection-lost` (red), `sync-failed` (orange), `session-expired` (red).
+- Background: `#0A0A0A`, min-height 180px
+- Icon/title color matches variant
+- Description: 11px JetBrains Mono, `#666`
+- Button: outlined in variant color (or green filled for session-expired)
+
+### SkeletonCard (`components/SkeletonCard.tsx`)
+
+Loading placeholder with `skeleton-pulse` animation. Three variants: `event`, `spot`, `planner`.
+- Background: `#1A1A1A`
+- Pulse elements use CSS `skeleton-pulse` class from globals.css
+
+### Modal (`components/ui/modal.tsx`)
+
+Generic portal-based modal with overlay, Escape-to-close, and click-outside-to-close.
+- Overlay: `rgba(0,0,0,0.7)`
+- Container: `#111111`, max-width 560px, max-height 720px
+- Title: 14px JetBrains Mono, semibold, uppercase, letter-spacing 1.5px
+- Close button: X icon, `#666` -> white on hover
+
+### Avatar (`components/ui/avatar.tsx`)
+
+User initial avatar circle.
+- Default size: 28px
+- Background: `#1E1E1E`, circular (border-radius: 50%)
+- Text: Space Grotesk, 600 weight, `#737373`
+
+### CityPickerModal (`components/CityPickerModal.tsx`)
+
+Google Places-powered city search for trip creation.
+- Search input: `#0A0A0A` background, 48px height
+- Results: city name in Space Grotesk 14px white, secondary text in JetBrains Mono 10px `#666`
+- Loading: Loader2 spinner in `#525252`
+- Resolving: Loader2 spinner in `#00E87B`
+
+### TripSelector (`components/TripSelector.tsx`)
+
+Header dropdown for switching trips and city legs.
+- Trigger: JetBrains Mono 10px, `#737373`, MapPin icon in `#00E87B`
+- Dropdown: `#111111` background, `#262626` border
+- Section headers: 9px uppercase, `#525252`
+- Active item: `#00E87B`, font-weight 600
+- Inactive: `#a3a3a3`, font-weight 400
+
+### StatusBar (`components/StatusBar.tsx`)
+
+Full-width bottom bar with connection health and route summary.
+- Height: 28px, background `#080808`
+- Health dot: 6px circle, `#00E87B` (healthy) or `#FF4444` (error)
+- Status text: JetBrains Mono 10px
+- Sync age: `#444`
+- Route summary: `#666`
+
+### CookieConsent (`components/CookieConsent.tsx`)
+
+GDPR cookie consent banner fixed to bottom of viewport.
+- Background: `#111111`, border-top with `--color-border`
+- Text: 0.82rem `--color-foreground-secondary`
+- Buttons: standard Button component (Accept primary, Decline secondary)
+
+### Leg Badge Colors (Dashboard)
+
+Multi-leg trips display colored badges per city. The color cycle:
+1. `#00E87B` (green)
+2. `#3B82F6` (blue)
+3. `#A855F7` (purple)
+4. `#F59E0B` (amber)
+5. `#EF4444` (red)
+6. `#06B6D4` (cyan)

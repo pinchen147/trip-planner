@@ -1,5 +1,5 @@
 import { requireAuthenticatedClient } from '@/lib/request-auth';
-import { getPlannerRoomCodeFromUrl, parsePlannerPostPayload } from '@/lib/planner-api';
+import { getPlannerRoomCodeFromUrl, getPlannerTripIdFromUrl, parsePlannerPostPayload } from '@/lib/planner-api';
 
 export const runtime = 'nodejs';
 
@@ -10,8 +10,15 @@ export async function GET(request: Request) {
   }
 
   const roomCode = getPlannerRoomCodeFromUrl(request.url);
+  const tripId = getPlannerTripIdFromUrl(request.url);
+
+  if (!tripId) {
+    return Response.json({ error: 'tripId query parameter is required.' }, { status: 400 });
+  }
+
   try {
     const payload = await auth.client.query('planner:getPlannerState', {
+      tripId,
       roomCode: roomCode || undefined
     });
     return Response.json(payload);
@@ -55,8 +62,18 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!plannerPayload.tripId) {
+    return Response.json({ error: 'tripId is required.' }, { status: 400 });
+  }
+
+  if (!plannerPayload.cityId) {
+    return Response.json({ error: 'cityId is required.' }, { status: 400 });
+  }
+
   try {
     const payload = await auth.client.mutation('planner:replacePlannerState', {
+      tripId: plannerPayload.tripId,
+      cityId: plannerPayload.cityId,
       roomCode: plannerPayload.roomCode || undefined,
       plannerByDate: plannerPayload.plannerByDate
     });

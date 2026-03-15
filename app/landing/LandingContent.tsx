@@ -27,31 +27,31 @@ import {
 
 const MAP_FEATURE_BULLETS = [
   'Color-coded pins: events, eat, bar, cafes, shops, avoid',
-  'Live crime heatmap overlay from SFPD incident data',
+  'Live crime heatmap overlay from city incident data',
   'Route lines between planned stops with time estimates',
   'Days-remaining countdown so you prioritize what\'s soon',
 ];
 
 const SAFETY_SOURCES = [
   {
-    name: 'SFPD Crime Maps',
-    url: 'https://sfgov.org/services/sf-crime-maps',
-    desc: 'Official SF government crime mapping',
+    name: 'SF Open Data — SFPD Incidents',
+    url: 'https://data.sfgov.org/d/wg3w-h783',
+    desc: 'San Francisco police incident reports',
   },
   {
-    name: 'Safemap Interactive Heatmap',
-    url: 'https://safemap.io/sf/map',
-    desc: 'Visual crime density by block',
+    name: 'NYC Open Data — NYPD Complaints',
+    url: 'https://data.cityofnewyork.us/d/5uac-w243',
+    desc: 'New York City crime complaint data',
   },
   {
-    name: 'SFPD Crime Dashboard',
-    url: 'https://sanfranciscopolice.org',
-    desc: 'Police department incident data',
+    name: 'LA Open Data — LAPD Crime Reports',
+    url: 'https://data.lacity.org/d/2nrs-mtv8',
+    desc: 'Los Angeles crime data from 2020 to present',
   },
   {
-    name: 'CivicHub Live Reports',
-    url: 'https://civichub.us/ca/san-francisco',
-    desc: 'Community-reported real-time incidents',
+    name: 'Chicago Data Portal — CPD Crimes',
+    url: 'https://data.cityofchicago.org/d/ijzp-q8t2',
+    desc: 'Chicago police department crime reports',
   },
 ];
 
@@ -141,7 +141,7 @@ export default function LandingContent() {
             <div className="flex items-center gap-2">
               <MapPin size={14} className="text-accent" />
               <span className="text-[13px] font-semibold uppercase tracking-[1px]">
-                SF Trip Planner
+                Trip Planner
               </span>
             </div>
             <HoverLift y={-1} tapScale={0.985} className="inline-flex">
@@ -228,7 +228,7 @@ export default function LandingContent() {
                 </div>
                 <Image
                   src="/screenshots/planning.png"
-                  alt="SF Trip Planner — Planning View with map, events list, and day planner"
+                  alt="Trip Planner — Planning View with map, events list, and day planner"
                   width={1920}
                   height={1080}
                   className="block w-full"
@@ -255,7 +255,7 @@ export default function LandingContent() {
             </FadeItem>
             <FadeItem>
               <p className="mt-4 max-w-[640px] text-[13px] leading-relaxed text-foreground-secondary">
-                You&apos;re visiting SF. You&apos;ve done the research. Now your browser has 47 tabs open,
+                You&apos;re visiting a new city. You&apos;ve done the research. Now your browser has 47 tabs open,
                 you don&apos;t know what to do on Tuesday, and you&apos;re not sure which neighborhoods
                 are safe to walk at night.
               </p>
@@ -290,7 +290,7 @@ export default function LandingContent() {
                     [Safety_Blind_Spot]
                   </p>
                   <p className="mt-2 text-[13px] text-foreground-secondary">
-                    Let&apos;s be honest&mdash;SF has neighborhoods where you don&apos;t want to wander at
+                    Every city has neighborhoods where you don&apos;t want to wander at
                     10 PM. But crime maps and event pins live on completely different websites. Until now.
                   </p>
                 </div>
@@ -340,7 +340,7 @@ export default function LandingContent() {
               <AnimatedFeatureCard
                 icon={ShieldAlert}
                 title="See Where It's Safe"
-                description="SF isn't all sunshine. Toggle the live crime heatmap to see which blocks had recent incidents. Pick restaurants in safe zones. Avoid walking through hot spots at night. Data sourced from SFPD and CivicHub."
+                description="Toggle the live crime heatmap to see which blocks had recent incidents. Pick restaurants in safe zones. Avoid walking through hot spots at night. Data sourced from official city open data portals."
                 accent="danger"
               />
             </div>
@@ -409,8 +409,8 @@ export default function LandingContent() {
                       {'// CRIME_DATA_SOURCES'}
                     </p>
                     <p className="mt-3 text-[13px] leading-relaxed text-foreground-secondary">
-                      The crime heatmap pulls from publicly available San Francisco safety data,
-                      so you can overlay real incident reports directly on top of your trip plan.
+                      The crime heatmap pulls from publicly available city safety data
+                      across SF, NYC, LA, and Chicago, so you can overlay real incident reports directly on top of your trip plan.
                     </p>
                     <div className="mt-5 space-y-3">
                       {SAFETY_SOURCES.map((source) => (
@@ -446,17 +446,17 @@ export default function LandingContent() {
                     Know Where to Walk&mdash;and Where Not To
                   </h2>
                   <p className="mt-4 text-[13px] leading-relaxed text-foreground-secondary">
-                    San Francisco is an incredible city, but certain areas see more street crime than
-                    others. The Tenderloin at midnight is a different experience than the Marina at noon.
+                    Every major city has areas that see more street crime than
+                    others. Times Square at 2 AM is different from the Upper West Side at noon.
                   </p>
                   <p className="mt-3 text-[13px] leading-relaxed text-foreground-secondary">
-                    SF Trip Planner overlays a live crime heatmap directly on top of your events
+                    Trip Planner overlays a live crime heatmap directly on top of your events
                     and spots. See if that 9 PM meetup is in a safe zone. Check the walk from
                     dinner to your Airbnb. Make informed decisions about where to go and when.
                   </p>
                   <p className="mt-3 text-[13px] leading-relaxed text-foreground-secondary">
                     <span className="text-foreground">This isn&apos;t fear-mongering&mdash;it&apos;s situational awareness.</span>{' '}
-                    The same data SFPD publishes, layered onto your trip plan so you don&apos;t
+                    The same data city police departments publish, layered onto your trip plan so you don&apos;t
                     have to check a separate website.
                   </p>
                 </div>
@@ -670,13 +670,13 @@ export default function LandingContent() {
               <div className="flex items-center gap-2">
                 <MapPin size={12} className="text-accent" />
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-muted">
-                  SF Trip Planner
+                  Trip Planner
                 </span>
               </div>
             </FadeItem>
             <FadeItem>
               <p className="text-[11px] text-muted">
-                Built for a trip to San Francisco. Open source.
+                Plan trips to any city. Open source.
               </p>
             </FadeItem>
           </InViewStagger>

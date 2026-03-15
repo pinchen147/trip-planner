@@ -106,7 +106,7 @@ export default function PlannerItinerary() {
     routeSummary, isRouteUpdating,
     clearDayPlan, startPlanDrag, removePlanItem,
     handleExportPlannerIcs, handleAddDayPlanToGoogleCalendar,
-    isInitializing
+    isInitializing, timezone
   } = useTrip();
 
   if (isInitializing) {
@@ -126,7 +126,12 @@ export default function PlannerItinerary() {
     <div className="flex flex-col p-3 min-h-0 h-full overflow-hidden">
       <div className="flex items-start justify-between gap-2 mb-2.5 flex-wrap">
         <div>
-          <h2 className="m-0 text-base font-bold tracking-tight">{selectedDate ? formatDate(selectedDate) : 'No date selected'}</h2>
+          <h2
+            className="m-0 text-sm font-semibold"
+            style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk', sans-serif)" }}
+          >
+            Day Plan {selectedDate ? `· ${formatDate(selectedDate, timezone)}` : ''}
+          </h2>
           <div className="flex gap-1.5 items-center mt-1">
             <Select value={travelMode} onValueChange={setTravelMode}>
               <SelectTrigger id="travel-mode" className="min-h-[30px] min-w-[110px]">
@@ -155,8 +160,25 @@ export default function PlannerItinerary() {
           </div>
         </div>
         <div className="flex gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={handleExportPlannerIcs}
+            disabled={!selectedDate || dayPlanItems.length === 0}
+            className="px-2.5 py-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'transparent',
+              border: '1px solid #262626',
+              fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)",
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              color: '#525252',
+              textTransform: 'uppercase',
+            }}
+          >
+            EXPORT
+          </button>
           <Button type="button" size="sm" variant="secondary" onClick={clearDayPlan} disabled={!selectedDate || dayPlanItems.length === 0 || !hasEditableItems}>Clear</Button>
-          <Button type="button" size="sm" variant="secondary" onClick={handleExportPlannerIcs} disabled={!selectedDate || dayPlanItems.length === 0}>.ics</Button>
           <Button type="button" size="sm" variant="secondary" onClick={handleAddDayPlanToGoogleCalendar} disabled={!selectedDate || dayPlanItems.length === 0}>GCal</Button>
         </div>
       </div>

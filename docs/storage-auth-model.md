@@ -1,117 +1,126 @@
 # Storage and Auth Model (Current)
 
-This document describes how the app currently uses local browser storage, local server files, and Convex, plus how the admin password gates privileged actions.
+> **Last Updated:** 2026-03-15
+
+This document describes how the app currently uses browser storage, Convex real-time database, and magic-link authentication to gate access.
 
 ## 1) Storage Layers
 
 ### Browser localStorage (per browser profile)
 
-- Planner data (default): `sf-trip-day-plans-v1`
-- Planner mode preference: `sf-trip-planner-mode-v1` (`local` or `shared`)
-- Shared room preference: `sf-trip-shared-room-v1`
-- Shared planner local cache copy: `sf-trip-day-plans-v1:shared:<roomId>`
-- Geocode cache in browser: `sf-trip-geocode-cache-v1`
+- Active trip ID: `tripPlanner:activeTripId`
+- Cookie consent: `cookie-consent` (`accepted` | `declined`)
 
 Behavior:
-- Planner always writes to localStorage first.
-- In shared mode, local cache is still used for immediate UX, then synced to server when unlocked.
+- The active trip ID is written when a user selects a trip from the dashboard or TripSelector.
+- TripProvider reads this on mount; URL params (`/trips/{urlId}/...`) take priority.
+- Cookie consent is read/written by the CookieConsent component; accepted/declined values persist across sessions.
 
-### Local server files (`data/`)
-
-- `data/events-cache.json`
-- `data/geocode-cache.json`
-- `data/route-cache.json`
-- `data/trip-config.json`
-
-Behavior:
-- Used as local fallback and cache, including when Convex is unavailable.
-- Useful for local/dev resilience.
-
-### Convex (remote DB, when `CONVEX_URL` is configured)
+### Convex (remote DB, primary data store)
 
 Tables used:
-- `events`, `spots`, `sources`, `syncMeta`
-- `plannerState` (shared planner by `roomId`)
-- `geocodeCache`, `routeCache`
-- `tripConfig`
+- `cities` -- city definitions with map bounds, timezone, locale, crime adapter
+- `trips` -- user trips with multi-leg array
+- `tripConfig` -- per-trip timezone, date range, base location
+- `events`, `spots`, `sources`, `syncMeta` -- city-scoped content
+- `plannerEntries` -- planner items scoped to trip + room
+- `pairRooms`, `pairMembers` -- pair planning rooms scoped to trip
+- `userProfiles` -- role-based access (owner/member)
+- `geocodeCache`, `routeCache` -- cached API responses
+- `plannerState` -- legacy planner table (kept for reference)
 
 Behavior:
-- `/api/events` reads from Convex first; falls back to local/sample when needed.
-- `/api/sync` writes synced data to Convex and local caches.
-- Shared planner persistence is in Convex (`plannerState`) by room ID.
+- All data is stored in Convex. There are no local server files or JSON caches.
+- API routes create a `ConvexHttpClient` with the user's auth token to proxy requests.
+- Events, spots, and sources are scoped by `cityId`.
+- Planner entries, pair rooms, and members are scoped by `tripId`.
+- Trip config is scoped by `tripId` (one config per trip).
 
-## 2) Planner: Local vs Shared
+## 2) Planner: Trip-Scoped Pair Rooms
 
-### Local mode
+### Solo mode
 
-- Planner data stays in browser localStorage only.
-- No admin session required.
-- No remote planner read/write.
+- Planner data is stored in Convex `plannerEntries` table, keyed by `tripId` + `roomCode` + `ownerUserId`.
+- No pair room is required; the system uses a default room code.
 
-### Shared mode (2-person mode)
+### Shared mode (2-person pair planning)
 
 - Requires:
-  - Valid admin session (password unlock),
-  - Valid room ID (2-64 chars, `a-z`, `0-9`, `_`, `-`),
-  - Convex connectivity for remote persistence.
-- Reads from `GET /api/planner?roomId=<id>`.
-- Writes to `POST /api/planner?roomId=<id>` (debounced from client).
-- If remote call fails, app continues with local cache and logs an error.
+  - Authenticated user (magic link session),
+  - Valid room code (2-64 chars, `a-z`, `0-9`, `_`, `-`),
+  - Convex connectivity.
+- Planner entries are scoped to `tripId + roomCode`.
+- Each user's entries are further scoped by `ownerUserId`.
+- Reads/writes go through `GET/POST /api/planner` with `roomId` parameter.
 
-## 3) Admin Password and Session
+## 3) Authentication
 
-Server env vars:
-- `APP_ADMIN_PASSWORD` (required for auth-protected actions)
-- `APP_SESSION_SECRET` (optional; defaults to `APP_ADMIN_PASSWORD` if omitted)
+### Magic Link (Resend)
 
-Session details:
-- Cookie name: `sf_trip_admin_session`
-- `HttpOnly`, `SameSite=Lax`, `Secure` in production
-- Max age: 12 hours
+Auth is handled by `@convex-dev/auth` with Resend as the email provider:
 
-Auth endpoints:
-- `GET /api/auth/session` -> current auth status
-- `POST /api/auth/session` with `{ "password": "..." }` -> unlocks, sets cookie
-- `DELETE /api/auth/session` -> locks, clears cookie
+- Provider: `Email` with Resend API (`convex/auth.ts`)
+- Link expiry: 1 hour
+- Email template: branded HTML with "TRIP PLANNER" branding and `#00FF88` accent
+- From address: configurable via `AUTH_EMAIL_FROM` env var (defaults to `Trip Planner <onboarding@resend.dev>`)
 
-Failure modes:
-- `503` when password is not configured on server.
-- `401` when password/session is missing or invalid.
+### Session Management
 
-## 4) What Is Password-Protected
+- Session is managed by Convex Auth (JWT-based, not cookie-based admin password).
+- The `convexAuthNextjsToken()` function extracts the token from the request.
+- API routes use `requireAuthenticatedClient()` or `requireOwnerClient()` from `lib/request-auth.ts`.
 
-Protected (requires unlocked admin session):
-- `POST /api/sync`
-- `POST /api/config`
-- `POST /api/sources`
-- `PATCH|POST(sync)|DELETE /api/sources/[sourceId]`
-- `GET|POST /api/planner` when `roomId` is provided
+### Dev Bypass
 
-Not protected:
-- `GET /api/events`
-- `GET /api/config`
-- `GET /api/sources`
-- Planner local mode operations in browser
+A temporary `DEV_BYPASS_AUTH = true` flag exists in three files:
+- `convex/authz.ts` -- bypasses userId extraction
+- `lib/request-auth.ts` -- bypasses token verification
+- `middleware.ts` -- skips auth redirects
 
-## 5) Firecrawl and Sync
+When enabled, all requests are treated as authenticated with a hardcoded `dev-bypass` userId.
 
-- Firecrawl is only invoked during sync flows inside server sync logic.
-- Since sync is admin-protected, Firecrawl usage is effectively admin-gated.
-- Missing `FIRECRAWL_API_KEY` will surface sync-stage errors for RSS extraction.
+### Authorization Guards
 
-## 6) Password Operations (Recommended)
+Two guard levels in `convex/authz.ts`:
+- `requireAuthenticatedUserId(ctx)` -- any logged-in user
+- `requireOwnerUserId(ctx)` -- must have `role: 'owner'` in `userProfiles` table
 
-Do not commit actual passwords into repo docs or source.
+## 4) Route Protection
 
-Use env var `APP_ADMIN_PASSWORD` in:
-- Local `.env` / `.env.local`
-- Vercel envs (`development`, `preview`, `production`)
+### Middleware (`middleware.ts`)
 
-If rotating password:
-1. Update local env.
-2. Update Vercel env for all target environments.
-3. Redeploy/restart so server picks up new env value.
-4. Re-login in Config (old session cookie becomes invalid if signing secret/password changed).
+Protected routes:
+- `/dashboard(.*)` -- trip dashboard
+- `/trips(.*)` -- all trip planning views
 
-Optional hardening:
-- Set a dedicated `APP_SESSION_SECRET` so session signing is independent of password rotation.
+Redirect logic:
+- Unauthenticated users hitting protected routes -> `/signin`
+- Authenticated users hitting `/signin` -> `/dashboard`
+- Legacy tab routes (`/map`, `/planning`, etc.) -> `/dashboard` or `/trips/{tripId}/{tab}` via query param
+
+### API Route Auth
+
+| Route | Auth Level | Guard Function |
+|-------|-----------|----------------|
+| `GET /api/cities` | Authenticated | `requireAuthenticatedClient` |
+| `POST /api/cities` | Owner | `requireOwnerClient` |
+| `GET /api/trips` | Authenticated | `requireAuthenticatedClient` |
+| `POST /api/trips` | Authenticated | `requireAuthenticatedClient` |
+| `GET /api/events` | Authenticated | `requireAuthenticatedClient` |
+| `POST /api/sync` | Owner | `requireOwnerClient` |
+| `GET /api/config` | Authenticated | `requireAuthenticatedClient` |
+| `POST /api/config` | Owner | `requireOwnerClient` |
+| `GET/POST /api/sources` | Owner | `requireOwnerClient` |
+| `GET/POST /api/pair` | Authenticated | `requireAuthenticatedClient` |
+| `GET/POST /api/planner` | Authenticated | `requireAuthenticatedClient` |
+| `GET /api/crime` | Authenticated | `requireAuthenticatedClient` |
+
+## 5) Environment Variables (Auth-Related)
+
+| Variable | Purpose |
+|----------|---------|
+| `CONVEX_URL` / `NEXT_PUBLIC_CONVEX_URL` | Convex deployment URL |
+| `AUTH_RESEND_KEY` | Resend API key for magic link emails |
+| `AUTH_EMAIL_FROM` | From address for auth emails |
+| `AUTH_RESEND_TEMPLATE_ID` | Optional Resend template ID |
+| `NEXT_PUBLIC_CONVEX_URL` | Client-side Convex URL |

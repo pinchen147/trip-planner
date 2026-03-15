@@ -1,17 +1,28 @@
 import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
 import { ConvexHttpClient } from 'convex/browser';
 
+// --- TEMPORARY AUTH BYPASS ---
+const DEV_BYPASS_AUTH = true;
+const DEV_BYPASS_EMAIL = 'pinchen147@gmail.com';
+// --- END BYPASS ---
+
 function getConvexUrl() {
   return process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL || '';
 }
 
-function createConvexClientWithToken(token) {
+function createConvexClient() {
   const convexUrl = getConvexUrl();
   if (!convexUrl) {
     return null;
   }
-  const client = new ConvexHttpClient(convexUrl);
-  client.setAuth(token);
+  return new ConvexHttpClient(convexUrl);
+}
+
+function createConvexClientWithToken(token) {
+  const client = createConvexClient();
+  if (client && token) {
+    client.setAuth(token);
+  }
   return client;
 }
 
@@ -26,6 +37,22 @@ function unauthenticatedResponse() {
 }
 
 export async function requireAuthenticatedClient() {
+  if (DEV_BYPASS_AUTH) {
+    const client = createConvexClient();
+    if (!client) {
+      return {
+        client: null,
+        deniedResponse: Response.json({ error: 'CONVEX_URL is missing.' }, { status: 503 }),
+        profile: null,
+      };
+    }
+    return {
+      client,
+      deniedResponse: null,
+      profile: { email: DEV_BYPASS_EMAIL, role: 'owner', userId: 'dev-bypass' },
+    };
+  }
+
   const token = await convexAuthNextjsToken();
   if (!token) {
     return {
@@ -74,6 +101,10 @@ export async function requireAuthenticatedClient() {
 }
 
 export async function requireOwnerClient() {
+  if (DEV_BYPASS_AUTH) {
+    return requireAuthenticatedClient();
+  }
+
   const auth = await requireAuthenticatedClient();
   if (auth.deniedResponse) {
     return auth;

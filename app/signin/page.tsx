@@ -18,7 +18,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace('/planning');
+      router.replace('/dashboard');
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -38,7 +38,7 @@ export default function SignInPage() {
     try {
       const result = await signIn('resend', {
         email: normalizedEmail,
-        redirectTo: '/planning'
+        redirectTo: '/dashboard'
       });
       setSent(true);
       if (result?.signingIn) {
@@ -96,8 +96,8 @@ export default function SignInPage() {
           <div
             className="flex items-center justify-center"
             style={{
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
               border: '1px solid #00FF88',
               background: '#0A0A0A',
             }}
@@ -115,7 +115,7 @@ export default function SignInPage() {
                 letterSpacing: '-0.5px',
               }}
             >
-              SF TRIP PLANNER
+              TRIP PLANNER
             </h1>
             <p
               className="m-0 mt-1"

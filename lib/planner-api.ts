@@ -88,22 +88,33 @@ export function getPlannerRoomCodeFromUrl(url: string) {
   return normalizePlannerRoomCode(parsed.searchParams.get('roomId') || parsed.searchParams.get('roomCode'));
 }
 
+export function getPlannerTripIdFromUrl(url: string) {
+  const parsed = new URL(url);
+  return parsed.searchParams.get('tripId') || '';
+}
+
 export function parsePlannerPostPayload(body: unknown, queryRoomCode: string) {
   const bodyObject = body && typeof body === 'object' ? body as Record<string, unknown> : null;
   const plannerByDate = bodyObject?.plannerByDate;
   if (!bodyObject || !plannerByDate || typeof plannerByDate !== 'object' || Array.isArray(plannerByDate)) {
     return {
       ok: false,
+      tripId: '',
+      cityId: '',
       roomCode: '',
       plannerByDate: null,
       error: 'plannerByDate object is required.'
     };
   }
 
+  const tripId = String(bodyObject.tripId || '').trim();
+  const cityId = String(bodyObject.cityId || '').trim();
   const roomCode = normalizePlannerRoomCode(bodyObject.roomId || bodyObject.roomCode || queryRoomCode);
   const sanitizedPlannerByDate = sanitizePlannerByDateInput(plannerByDate);
   return {
     ok: true,
+    tripId,
+    cityId,
     roomCode,
     plannerByDate: sanitizedPlannerByDate,
     error: ''

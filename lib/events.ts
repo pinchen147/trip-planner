@@ -85,12 +85,10 @@ async function writeTextFileBestEffort(filePath, contents, { ensureDataDir = fal
 }
 
 export function getCalendarUrls() {
-  return [
-    'https://api2.luma.com/ics/get?entity=calendar&id=cal-kC1rltFkxqfbHcB',
-    'https://api2.luma.com/ics/get?entity=discover&id=discplace-BDj7GNbGlsF7Cka'
-    // Firecrawl/RSS disabled: intentionally not auto-including Beehiiv RSS fallback.
-    // DEFAULT_BEEHIIV_RSS_URL
-  ];
+  const envUrls = (process.env.LUMA_CALENDAR_URLS || '').split(',').map((v) => v.trim()).filter(Boolean);
+  if (envUrls.length > 0) return envUrls;
+  // No hardcoded defaults — each city should configure its own event sources
+  return [];
 }
 
 export function getDefaultSpotSourceUrls() {
@@ -100,11 +98,11 @@ export function getDefaultSpotSourceUrls() {
     .filter(Boolean);
 }
 
-export async function loadBaseLocation() {
+export async function loadBaseLocation(tripId = '') {
   try {
     const client = createConvexClient();
-    if (client) {
-      const result = await client.query('tripConfig:getTripConfig', {});
+    if (client && tripId) {
+      const result = await client.query('tripConfig:getTripConfig', { tripId });
       if (result?.baseLocation) {
         return result.baseLocation;
       }
@@ -116,16 +114,17 @@ export async function loadBaseLocation() {
     const value = await readFile(DOC_LOCATION_FILE, 'utf-8');
     return value.trim();
   } catch {
-    return 'San Francisco, CA';
+    return '';
   }
 }
 
-export async function saveBaseLocation(text) {
+export async function saveBaseLocation(text, tripId = '') {
   const trimmed = (text || '').trim();
   const client = createConvexClient();
-  if (client) {
-    const existing = await client.query('tripConfig:getTripConfig', {});
+  if (client && tripId) {
+    const existing = await client.query('tripConfig:getTripConfig', { tripId });
     await client.mutation('tripConfig:saveTripConfig', {
+      tripId,
       tripStart: existing?.tripStart || '',
       tripEnd: existing?.tripEnd || '',
       baseLocation: trimmed,
@@ -135,13 +134,13 @@ export async function saveBaseLocation(text) {
   await writeTextFileBestEffort(DOC_LOCATION_FILE, trimmed, { label: 'base location' });
 }
 
-export async function loadTripConfig() {
+export async function loadTripConfig(tripId = '') {
   try {
     const client = createConvexClient();
-    if (client) {
-      const result = await client.query('tripConfig:getTripConfig', {});
+    if (client && tripId) {
+      const result = await client.query('tripConfig:getTripConfig', { tripId });
       if (result) {
-        return { tripStart: result.tripStart ?? '', tripEnd: result.tripEnd ?? '', baseLocation: result.baseLocation ?? '' };
+        return { tripId: result.tripId, timezone: result.timezone ?? 'UTC', tripStart: result.tripStart ?? '', tripEnd: result.tripEnd ?? '', baseLocation: result.baseLocation ?? '' };
       }
     }
   } catch {
@@ -156,11 +155,13 @@ export async function loadTripConfig() {
   }
 }
 
-export async function saveTripConfig({ tripStart, tripEnd }) {
+export async function saveTripConfig({ tripId, timezone, tripStart, tripEnd }) {
   const now = new Date().toISOString();
   const client = createConvexClient();
-  if (client) {
+  if (client && tripId) {
     await client.mutation('tripConfig:saveTripConfig', {
+      tripId,
+      timezone,
       tripStart: tripStart || '',
       tripEnd: tripEnd || '',
       updatedAt: now
@@ -184,8 +185,8 @@ export async function resolveAddressCoordinates(addressText) {
   };
 }
 
-export async function loadSourcesPayload() {
-  const sources = await loadSourcesFromConvex();
+export async function loadSourcesPayload(cityId = '') {
+  const sources = await loadSourcesFromConvex(cityId);
   const fallbackEventSources = getCalendarUrls().map((url) => ({
     id: `fallback-event-${url}`,
     sourceType: 'event',
@@ -237,9 +238,14 @@ export async function createSourcePayload(input) {
     throw new Error('CONVEX_URL is missing. Configure Convex to persist global sources.');
   }
 
+  const cityId = cleanText(input?.cityId);
   const sourceType = cleanText(input?.sourceType).toLowerCase();
   const url = cleanText(input?.url);
   const label = cleanText(input?.label);
+
+  if (!cityId) {
+    throw new Error('cityId is required.');
+  }
 
   if (!SOURCE_TYPES.has(sourceType)) {
     throw new Error('sourceType must be "event" or "spot".');
@@ -248,6 +254,7 @@ export async function createSourcePayload(input) {
   await assertValidSourceUrl(url);
 
   const source = await client.mutation('sources:createSource', {
+    cityId,
     sourceType,
     url,
     label: label || url
@@ -319,19 +326,19 @@ export async function deleteSourcePayload(sourceId) {
   };
 }
 
-export async function loadEventsPayload() {
+export async function loadEventsPayload(cityId = '') {
   const fallbackCalendars = getCalendarUrls();
   const fallbackPlaces = await loadStaticPlaces();
-  const sources = await loadSourcesFromConvex();
+  const sources = await loadSourcesFromConvex(cityId);
   const sourceCalendars = getActiveSourceUrls(sources, 'event');
   const calendars = sourceCalendars.length > 0 ? sourceCalendars : fallbackCalendars;
-  const spotsPayload = await loadSpotsFromConvex();
+  const spotsPayload = await loadSpotsFromConvex(cityId);
   const placesFromConvex = Array.isArray(spotsPayload?.spots) ? spotsPayload.spots : [];
   const places = mergeStaticRegionPlaces(
     placesFromConvex.length > 0 ? placesFromConvex : fallbackPlaces,
     fallbackPlaces
   );
-  const convexPayload = await loadEventsFromConvex(calendars);
+  const convexPayload = await loadEventsFromConvex(cityId, calendars);
 
   if (convexPayload) {
     return {
@@ -502,9 +509,9 @@ export async function saveCachedRoutePayload(cacheKey, routePayloadInput) {
   }
 }
 
-export async function syncEvents() {
+export async function syncEvents(cityId = '') {
   const nowIso = new Date().toISOString();
-  const sourceSnapshot = await getSourceSnapshotForSync();
+  const sourceSnapshot = await getSourceSnapshotForSync(cityId);
   const rssFallbackStateBySourceUrl = await loadRssSeenBySourceUrlFromEventsCache();
   const eventSyncResult = await syncEventsFromSources({
     eventSources: sourceSnapshot.eventSources,
@@ -538,8 +545,8 @@ export async function syncEvents() {
     label: 'events cache'
   });
   await Promise.allSettled([
-    saveEventsToConvex(payload),
-    saveSpotsToConvex({
+    saveEventsToConvex(cityId, payload),
+    saveSpotsToConvex(cityId, {
       spots: fallbackPlaces,
       syncedAt: nowIso,
       sourceUrls: spotSyncResult.sourceUrls
@@ -616,17 +623,17 @@ function createConvexClient() {
   return new ConvexHttpClient(convexUrl);
 }
 
-async function loadEventsFromConvex(calendars) {
+async function loadEventsFromConvex(cityId, calendars) {
   const client = createConvexClient();
 
-  if (!client) {
+  if (!client || !cityId) {
     return null;
   }
 
   try {
     const [events, syncMeta] = await Promise.all([
-      client.query('events:listEvents', {}),
-      client.query('events:getSyncMeta', {})
+      client.query('events:listEvents', { cityId }),
+      client.query('events:getSyncMeta', { cityId })
     ]);
 
     if (!Array.isArray(events)) {
@@ -652,15 +659,16 @@ async function loadEventsFromConvex(calendars) {
   }
 }
 
-async function saveEventsToConvex(payload) {
+async function saveEventsToConvex(cityId, payload) {
   const client = createConvexClient();
 
-  if (!client) {
+  if (!client || !cityId) {
     return;
   }
 
   try {
     await client.mutation('events:upsertEvents', {
+      cityId,
       events: payload.events,
       syncedAt: payload.meta.syncedAt,
       calendars: payload.meta.calendars,
@@ -708,15 +716,15 @@ async function savePlannerToConvex(plannerByDate, roomId) {
   }
 }
 
-async function loadSourcesFromConvex() {
+async function loadSourcesFromConvex(cityId = '') {
   const client = createConvexClient();
 
-  if (!client) {
+  if (!client || !cityId) {
     return null;
   }
 
   try {
-    const rows = await client.query('sources:listSources', {});
+    const rows = await client.query('sources:listSources', { cityId });
     if (!Array.isArray(rows)) {
       return [];
     }
@@ -730,17 +738,17 @@ async function loadSourcesFromConvex() {
   }
 }
 
-async function loadSpotsFromConvex() {
+async function loadSpotsFromConvex(cityId = '') {
   const client = createConvexClient();
 
-  if (!client) {
+  if (!client || !cityId) {
     return null;
   }
 
   try {
     const [spots, syncMeta] = await Promise.all([
-      client.query('spots:listSpots', {}),
-      client.query('spots:getSyncMeta', {})
+      client.query('spots:listSpots', { cityId }),
+      client.query('spots:getSyncMeta', { cityId })
     ]);
 
     if (!Array.isArray(spots)) {
@@ -766,10 +774,10 @@ async function loadSpotsFromConvex() {
   }
 }
 
-async function saveSpotsToConvex({ spots, syncedAt, sourceUrls }) {
+async function saveSpotsToConvex(cityId, { spots, syncedAt, sourceUrls }) {
   const client = createConvexClient();
 
-  if (!client) {
+  if (!client || !cityId) {
     return;
   }
 
@@ -779,6 +787,7 @@ async function saveSpotsToConvex({ spots, syncedAt, sourceUrls }) {
 
   try {
     await client.mutation('spots:upsertSpots', {
+      cityId,
       spots: sanitizedSpots,
       syncedAt,
       sourceUrls,
@@ -1048,8 +1057,8 @@ async function saveRssSeenBySourceUrlToEventsCache(rssStateBySourceUrl) {
   });
 }
 
-async function getSourceSnapshotForSync() {
-  const convexSources = await loadSourcesFromConvex();
+async function getSourceSnapshotForSync(cityId = '') {
+  const convexSources = await loadSourcesFromConvex(cityId);
   const eventSourcesFromConvex = getActiveSourcesByType(convexSources, 'event');
   const spotSourcesFromConvex = getActiveSourcesByType(convexSources, 'spot');
   const eventFallbackUrls = getCalendarUrls();
@@ -1782,6 +1791,7 @@ function normalizeSourceRecord(source) {
 
   return {
     id: cleanText(source._id || source.id),
+    cityId: cleanText(source.cityId),
     sourceType,
     url,
     label: cleanText(source.label) || url,

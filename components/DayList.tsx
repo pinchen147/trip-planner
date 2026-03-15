@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTrip } from '@/components/providers/TripProvider';
+import { MapPin } from 'lucide-react';
 import { formatDateWeekday, formatDateDayMonth, toISODate } from '@/lib/helpers';
 
 function intensity(count, max) {
@@ -78,7 +79,8 @@ export default function DayList() {
     setShowAllEvents,
     eventsByDate,
     planItemsByDate,
-    isInitializing
+    isInitializing,
+    timezone
   } = useTrip();
 
   const [isPastExpanded, setIsPastExpanded] = useState(false);
@@ -135,17 +137,34 @@ export default function DayList() {
       <button
         key={dateISO}
         type="button"
-        className={`relative flex flex-col gap-1 px-3 py-2.5 rounded-none text-left cursor-pointer transition-all duration-200 day-list-item-responsive
-          ${isActive
-            ? 'bg-accent-light border border-accent-border shadow-[0_0_0_2px_var(--color-accent-glow)]'
-            : 'border border-transparent hover:bg-card hover:border-border'}`}
+        className={`relative flex flex-col gap-1 px-3 py-2 rounded-none text-left cursor-pointer transition-all duration-200 day-list-item-responsive border-none`}
+        style={isActive
+          ? { background: 'rgba(0, 232, 123, 0.07)', borderLeft: '2px solid #00E87B' }
+          : { borderLeft: '2px solid transparent' }}
         onClick={() => {
           selectDate(dateISO);
         }}
       >
         <div>
-          <span className="block text-[0.65rem] font-bold text-muted uppercase tracking-wider leading-tight">{formatDateWeekday(dateISO)}</span>
-          <span className="block text-[0.85rem] font-bold text-foreground leading-snug">{formatDateDayMonth(dateISO)}</span>
+          <span
+            className="block text-[11px] leading-tight"
+            style={{
+              fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)",
+              fontWeight: isActive ? 600 : 500,
+              color: isActive ? '#F5F5F5' : '#737373',
+            }}
+          >
+            {formatDateWeekday(dateISO, timezone)}
+          </span>
+          <span
+            className="block text-[10px] leading-tight"
+            style={{
+              fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)",
+              color: isActive ? '#737373' : '#525252',
+            }}
+          >
+            {formatDateDayMonth(dateISO, timezone)}
+          </span>
         </div>
         <DayMetricsBars
           eventCount={eventCount}
@@ -170,7 +189,27 @@ export default function DayList() {
   }
 
   return (
-    <div className="flex flex-col gap-1 p-2 overflow-y-auto border-r border-border bg-bg-subtle scrollbar-thin day-list-responsive">
+    <div className="flex flex-col gap-0.5 overflow-y-auto border-r border-border scrollbar-thin day-list-responsive" style={{ background: '#080808', padding: '12px 0' }}>
+      {/* DAYS header */}
+      <span
+        className="px-3 pb-2 text-[10px] font-semibold uppercase"
+        style={{ color: '#525252', letterSpacing: 1, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}
+      >
+        DAYS
+      </span>
+      {/* City leg label */}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 mb-1"
+        style={{ borderLeft: '2px solid #00E87B' }}
+      >
+        <MapPin size={10} style={{ color: '#00E87B' }} />
+        <span
+          className="text-[9px] font-semibold uppercase"
+          style={{ color: '#00E87B', letterSpacing: 0.5, fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)" }}
+        >
+          SAN FRANCISCO
+        </span>
+      </div>
       {hasPastDates && (
         <button
           type="button"

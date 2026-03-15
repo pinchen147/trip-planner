@@ -1,5 +1,6 @@
 import { getAuthUserId } from '@convex-dev/auth/server';
 import type { MutationCtx, QueryCtx } from './_generated/server';
+import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
@@ -54,11 +55,11 @@ const pairRoomMutationResultValidator = v.object({
 });
 const joinPairRoomResultValidator = v.object({
   roomCode: v.string(),
-  memberCount: v.number(),
-  migratedLegacyRoom: v.boolean()
+  memberCount: v.number()
 });
 const listMyPairRoomsResultValidator = v.array(v.object({
   roomCode: v.string(),
+  tripId: v.id('trips'),
   memberCount: v.number(),
   joinedAt: v.string(),
   updatedAt: v.string()
@@ -82,20 +83,6 @@ type PlannerStateItem = PlanItem & {
 };
 
 type PlannerByDate = Record<string, PlanItem[]>;
-
-type PlannerEntryLike = {
-  dateISO: string;
-  itemId: string;
-  kind: 'event' | 'place';
-  sourceKey: string;
-  title: string;
-  locationText: string;
-  link: string;
-  tag: string;
-  startMinutes: number;
-  endMinutes: number;
-  updatedAt: string;
-};
 
 function cleanText(value: unknown) {
   return String(value || '').trim();
@@ -179,6 +166,7 @@ function toPersonalRoomCode(userId: string) {
 
 async function ensureRoomMembership(
   ctx: ConvexCtx,
+  tripId: Id<'trips'>,
   userId: string,
   roomCodeInput: string | undefined,
 ) {
@@ -192,7 +180,9 @@ async function ensureRoomMembership(
 
   const membership = await ctx.db
     .query('pairMembers')
-    .withIndex('by_room_user', (q) => q.eq('roomCode', normalizedRoomCode).eq('userId', userId))
+    .withIndex('by_trip_room_user', (q) =>
+      q.eq('tripId', tripId).eq('roomCode', normalizedRoomCode).eq('userId', userId)
+    )
     .first();
 
   if (!membership) {
@@ -256,6 +246,20 @@ function plannerFingerprint(plannerByDate: PlannerByDate) {
   return JSON.stringify(entries);
 }
 
+type PlannerEntryLike = {
+  dateISO: string;
+  itemId: string;
+  kind: 'event' | 'place';
+  sourceKey: string;
+  title: string;
+  locationText: string;
+  link: string;
+  tag: string;
+  startMinutes: number;
+  endMinutes: number;
+  updatedAt: string;
+};
+
 function plannerByDateFromRows(rows: PlannerEntryLike[]) {
   const plannerByDate: PlannerByDate = {};
   for (const row of rows) {
@@ -274,65 +278,19 @@ function plannerByDateFromRows(rows: PlannerEntryLike[]) {
   return finalizePlannerByDate(plannerByDate);
 }
 
-async function maybeMigrateLegacyPlanner(
-  ctx: MutationCtx,
-  roomCode: string,
-  ownerUserId: string,
-) {
-  const existingAnyRow = await ctx.db
-    .query('plannerEntries')
-    .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
-    .first();
-  if (existingAnyRow) {
-    return 0;
-  }
-
-  const legacy = await ctx.db
-    .query('plannerState')
-    .withIndex('by_key', (q) => q.eq('key', roomCode))
-    .first();
-  if (!legacy || !legacy.plannerByDate) {
-    return 0;
-  }
-
-  const sanitized = sanitizePlannerByDate(legacy.plannerByDate);
-  const now = new Date().toISOString();
-  let inserted = 0;
-  for (const [dateISO, items] of Object.entries(sanitized)) {
-    for (const item of items) {
-      await ctx.db.insert('plannerEntries', {
-        roomCode,
-        ownerUserId,
-        dateISO,
-        itemId: item.id,
-        kind: item.kind,
-        sourceKey: item.sourceKey,
-        title: item.title,
-        locationText: item.locationText,
-        link: item.link,
-        tag: item.tag,
-        startMinutes: item.startMinutes,
-        endMinutes: item.endMinutes,
-        updatedAt: now
-      });
-      inserted += 1;
-    }
-  }
-  return inserted;
-}
-
 export const getPlannerState = query({
   args: {
+    tripId: v.id('trips'),
     roomCode: v.optional(v.string())
   },
   returns: getPlannerStateResultValidator,
   handler: async (ctx, args) => {
     const userId = await requireCurrentUserId(ctx);
-    const { roomCode, isPairRoom } = await ensureRoomMembership(ctx, userId, args.roomCode);
+    const { roomCode, isPairRoom } = await ensureRoomMembership(ctx, args.tripId, userId, args.roomCode);
 
     const rows = await ctx.db
       .query('plannerEntries')
-      .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
+      .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', roomCode))
       .collect();
 
     const plannerByDateMine: Record<string, PlannerStateItem[]> = {};
@@ -364,7 +322,7 @@ export const getPlannerState = query({
       ? (
         await ctx.db
           .query('pairMembers')
-          .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
+          .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', roomCode))
           .collect()
       ).length
       : 1;
@@ -382,20 +340,21 @@ export const getPlannerState = query({
 
 export const replacePlannerState = mutation({
   args: {
+    tripId: v.id('trips'),
+    cityId: v.string(),
     roomCode: v.optional(v.string()),
     plannerByDate: plannerByDateValidator
   },
   returns: replacePlannerStateResultValidator,
   handler: async (ctx, args) => {
     const userId = await requireCurrentUserId(ctx);
-    const { roomCode, isPairRoom } = await ensureRoomMembership(ctx, userId, args.roomCode);
-    if (isPairRoom) {
-      await maybeMigrateLegacyPlanner(ctx, roomCode, userId);
-    }
+    const { roomCode } = await ensureRoomMembership(ctx, args.tripId, userId, args.roomCode);
 
     const existing = await ctx.db
       .query('plannerEntries')
-      .withIndex('by_room_owner', (q) => q.eq('roomCode', roomCode).eq('ownerUserId', userId))
+      .withIndex('by_trip_room_owner', (q) =>
+        q.eq('tripId', args.tripId).eq('roomCode', roomCode).eq('ownerUserId', userId)
+      )
       .collect();
 
     const sanitized = sanitizePlannerByDate(args.plannerByDate);
@@ -422,6 +381,8 @@ export const replacePlannerState = mutation({
     for (const [dateISO, items] of Object.entries(sanitized)) {
       for (const item of items) {
         await ctx.db.insert('plannerEntries', {
+          tripId: args.tripId,
+          cityId: args.cityId,
           roomCode,
           ownerUserId: userId,
           dateISO,
@@ -460,9 +421,11 @@ function generateRoomCode() {
 }
 
 export const createPairRoom = mutation({
-  args: {},
+  args: {
+    tripId: v.id('trips')
+  },
   returns: pairRoomMutationResultValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const userId = await requireCurrentUserId(ctx);
     const now = new Date().toISOString();
 
@@ -471,7 +434,7 @@ export const createPairRoom = mutation({
       const candidate = generateRoomCode();
       const existing = await ctx.db
         .query('pairRooms')
-        .withIndex('by_room_code', (q) => q.eq('roomCode', candidate))
+        .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', candidate))
         .first();
       if (!existing) {
         roomCode = candidate;
@@ -484,12 +447,14 @@ export const createPairRoom = mutation({
     }
 
     await ctx.db.insert('pairRooms', {
+      tripId: args.tripId,
       roomCode,
       createdByUserId: userId,
       createdAt: now,
       updatedAt: now
     });
     await ctx.db.insert('pairMembers', {
+      tripId: args.tripId,
       roomCode,
       userId,
       joinedAt: now
@@ -504,6 +469,7 @@ export const createPairRoom = mutation({
 
 export const joinPairRoom = mutation({
   args: {
+    tripId: v.id('trips'),
     roomCode: v.string()
   },
   returns: joinPairRoomResultValidator,
@@ -515,56 +481,34 @@ export const joinPairRoom = mutation({
     }
 
     const now = new Date().toISOString();
-    let room = await ctx.db
+    const room = await ctx.db
       .query('pairRooms')
-      .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
+      .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', roomCode))
       .first();
 
     if (!room) {
-      const legacy = await ctx.db
-        .query('plannerState')
-        .withIndex('by_key', (q) => q.eq('key', roomCode))
-        .first();
-      if (!legacy) {
-        throw new Error('Pair room not found.');
-      }
-
-      await ctx.db.insert('pairRooms', {
-        roomCode,
-        createdByUserId: userId,
-        createdAt: now,
-        updatedAt: now
-      });
-      await ctx.db.insert('pairMembers', {
-        roomCode,
-        userId,
-        joinedAt: now
-      });
-      await maybeMigrateLegacyPlanner(ctx, roomCode, userId);
-
-      return {
-        roomCode,
-        memberCount: 1,
-        migratedLegacyRoom: true
-      };
+      throw new Error('Pair room not found.');
     }
 
     const existingMembership = await ctx.db
       .query('pairMembers')
-      .withIndex('by_room_user', (q) => q.eq('roomCode', roomCode).eq('userId', userId))
+      .withIndex('by_trip_room_user', (q) =>
+        q.eq('tripId', args.tripId).eq('roomCode', roomCode).eq('userId', userId)
+      )
       .first();
 
     let didAddMembership = false;
     if (!existingMembership) {
       const members = await ctx.db
         .query('pairMembers')
-        .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
+        .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', roomCode))
         .collect();
       if (members.length >= 2) {
         throw new Error('This pair room is full (2 people max).');
       }
 
       await ctx.db.insert('pairMembers', {
+        tripId: args.tripId,
         roomCode,
         userId,
         joinedAt: now
@@ -581,22 +525,23 @@ export const joinPairRoom = mutation({
     const memberCount = (
       await ctx.db
         .query('pairMembers')
-        .withIndex('by_room_code', (q) => q.eq('roomCode', roomCode))
+        .withIndex('by_trip_room', (q) => q.eq('tripId', args.tripId).eq('roomCode', roomCode))
         .collect()
     ).length;
 
     return {
       roomCode,
-      memberCount,
-      migratedLegacyRoom: false
+      memberCount
     };
   }
 });
 
 export const listMyPairRooms = query({
-  args: {},
+  args: {
+    tripId: v.optional(v.id('trips'))
+  },
   returns: listMyPairRoomsResultValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const userId = await requireCurrentUserId(ctx);
     const memberships = await ctx.db
       .query('pairMembers')
@@ -605,9 +550,15 @@ export const listMyPairRooms = query({
 
     const rooms = [];
     for (const membership of memberships) {
+      if (args.tripId && membership.tripId !== args.tripId) {
+        continue;
+      }
+
       const room = await ctx.db
         .query('pairRooms')
-        .withIndex('by_room_code', (q) => q.eq('roomCode', membership.roomCode))
+        .withIndex('by_trip_room', (q) =>
+          q.eq('tripId', membership.tripId).eq('roomCode', membership.roomCode)
+        )
         .first();
       if (!room) {
         continue;
@@ -615,11 +566,14 @@ export const listMyPairRooms = query({
       const memberCount = (
         await ctx.db
           .query('pairMembers')
-          .withIndex('by_room_code', (q) => q.eq('roomCode', membership.roomCode))
+          .withIndex('by_trip_room', (q) =>
+            q.eq('tripId', membership.tripId).eq('roomCode', membership.roomCode)
+          )
           .collect()
       ).length;
       rooms.push({
         roomCode: membership.roomCode,
+        tripId: membership.tripId,
         memberCount,
         joinedAt: membership.joinedAt,
         updatedAt: room.updatedAt

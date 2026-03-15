@@ -3,14 +3,19 @@ import { parsePairActionBody } from '@/lib/pair-api';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request) {
   const auth = await requireAuthenticatedClient();
   if (auth.deniedResponse || !auth.client) {
     return auth.deniedResponse;
   }
 
+  const url = new URL(request.url);
+  const tripId = url.searchParams.get('tripId') || undefined;
+
   try {
-    const rooms = await auth.client.query('planner:listMyPairRooms', {});
+    const rooms = await auth.client.query('planner:listMyPairRooms', {
+      tripId
+    });
     return Response.json({ rooms: Array.isArray(rooms) ? rooms : [] });
   } catch (error) {
     return Response.json(
@@ -50,13 +55,22 @@ export async function POST(request) {
     );
   }
 
+  if (!pairAction.tripId) {
+    return Response.json({ error: 'tripId is required.' }, { status: 400 });
+  }
+
   try {
     if (pairAction.action === 'create') {
-      const payload = await auth.client.mutation('planner:createPairRoom', {});
+      const payload = await auth.client.mutation('planner:createPairRoom', {
+        tripId: pairAction.tripId
+      });
       return Response.json(payload);
     }
     if (pairAction.action === 'join') {
-      const payload = await auth.client.mutation('planner:joinPairRoom', { roomCode: pairAction.roomCode });
+      const payload = await auth.client.mutation('planner:joinPairRoom', {
+        tripId: pairAction.tripId,
+        roomCode: pairAction.roomCode
+      });
       return Response.json(payload);
     }
   } catch (error) {

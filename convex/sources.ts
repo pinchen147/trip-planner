@@ -7,6 +7,7 @@ const sourceTypeValidator = v.union(v.literal('event'), v.literal('spot'));
 const sourceStatusValidator = v.union(v.literal('active'), v.literal('paused'));
 const sourceRecordValidator = v.object({
   _id: v.id('sources'),
+  cityId: v.string(),
   sourceType: sourceTypeValidator,
   url: v.string(),
   label: v.string(),
@@ -23,6 +24,7 @@ const deleteSourceResultValidator = v.object({
 
 type SourceRecordLike = {
   _id: Id<'sources'>;
+  cityId: string;
   sourceType: 'event' | 'spot';
   url: string;
   label: string;
@@ -37,6 +39,7 @@ type SourceRecordLike = {
 function buildSourceResponse(row: SourceRecordLike) {
   return {
     _id: row._id,
+    cityId: row.cityId,
     sourceType: row.sourceType,
     url: row.url,
     label: row.label,
@@ -106,11 +109,16 @@ function assertPublicSourceUrl(url: string) {
 }
 
 export const listSources = query({
-  args: {},
+  args: {
+    cityId: v.string()
+  },
   returns: v.array(sourceRecordValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
-    const rows = await ctx.db.query('sources').collect();
+    const rows = await ctx.db
+      .query('sources')
+      .withIndex('by_city_type_status', (q) => q.eq('cityId', args.cityId))
+      .collect();
 
     return rows
       .map(({ _creationTime, ...row }) => buildSourceResponse(row))
@@ -120,6 +128,7 @@ export const listSources = query({
 
 export const listActiveSources = query({
   args: {
+    cityId: v.string(),
     sourceType: sourceTypeValidator
   },
   returns: v.array(sourceRecordValidator),
@@ -127,7 +136,9 @@ export const listActiveSources = query({
     await requireAuthenticatedUserId(ctx);
     const rows = await ctx.db
       .query('sources')
-      .withIndex('by_type_status', (q) => q.eq('sourceType', args.sourceType).eq('status', 'active'))
+      .withIndex('by_city_type_status', (q) =>
+        q.eq('cityId', args.cityId).eq('sourceType', args.sourceType).eq('status', 'active')
+      )
       .collect();
 
     return rows.map(({ _creationTime, ...row }) => buildSourceResponse(row));
@@ -136,6 +147,7 @@ export const listActiveSources = query({
 
 export const createSource = mutation({
   args: {
+    cityId: v.string(),
     sourceType: sourceTypeValidator,
     url: v.string(),
     label: v.optional(v.string())
@@ -148,9 +160,10 @@ export const createSource = mutation({
     const nextUrl = args.url.trim();
     const nextLabel = (args.label || '').trim() || nextUrl;
     assertPublicSourceUrl(nextUrl);
+
     const existing = await ctx.db
       .query('sources')
-      .withIndex('by_url', (q) => q.eq('url', nextUrl))
+      .withIndex('by_city_url', (q) => q.eq('cityId', args.cityId).eq('url', nextUrl))
       .first();
 
     if (existing && existing.sourceType === args.sourceType) {
@@ -172,6 +185,7 @@ export const createSource = mutation({
     }
 
     const sourceId = await ctx.db.insert('sources', {
+      cityId: args.cityId,
       sourceType: args.sourceType,
       url: nextUrl,
       label: nextLabel,
@@ -182,6 +196,7 @@ export const createSource = mutation({
 
     return buildSourceResponse({
       _id: sourceId,
+      cityId: args.cityId,
       sourceType: args.sourceType,
       url: nextUrl,
       label: nextLabel,
@@ -258,6 +273,7 @@ export const updateSource = mutation({
     }
     return buildSourceResponse({
       _id: existing._id,
+      cityId: existing.cityId,
       sourceType: existing.sourceType,
       url: existing.url,
       label: updates.label ?? existing.label,

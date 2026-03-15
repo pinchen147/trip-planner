@@ -8,10 +8,13 @@ export function normalizePairRoomCode(value: unknown) {
 
 export function parsePairActionBody(body: unknown) {
   const action = String((body as any)?.action || '').trim().toLowerCase();
+  const tripId = String((body as any)?.tripId || '').trim();
+
   if (action === 'create') {
     return {
       ok: true,
       action: 'create' as const,
+      tripId,
       roomCode: '',
       error: ''
     };
@@ -23,6 +26,7 @@ export function parsePairActionBody(body: unknown) {
       return {
         ok: false,
         action: 'join' as const,
+        tripId,
         roomCode: '',
         error: 'Room code is required (2-64 chars: a-z, 0-9, _ or -).'
       };
@@ -30,6 +34,7 @@ export function parsePairActionBody(body: unknown) {
     return {
       ok: true,
       action: 'join' as const,
+      tripId,
       roomCode,
       error: ''
     };
@@ -38,6 +43,7 @@ export function parsePairActionBody(body: unknown) {
   return {
     ok: false,
     action: '' as const,
+    tripId: '',
     roomCode: '',
     error: 'Unsupported action. Use "create" or "join".'
   };

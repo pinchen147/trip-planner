@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const protectedPaths = ['/api/', '/app/', '/planning', '/map', '/calendar', '/spots', '/config'];
+  const protectedPaths = ['/api/', '/app/', '/trips'];
 
   return {
     rules: [
@@ -48,6 +48,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: protectedPaths,
       },
     ],
-    sitemap: 'https://sf.ianhsiao.me/sitemap.xml',
+    sitemap: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://trip.ianhsiao.me'}/sitemap.xml`,
   };
 }

@@ -47,7 +47,7 @@ function SpotsItinerarySkeleton() {
 export default function SpotsItinerary() {
   const {
     visiblePlaces, placeTagFilter, setPlaceTagFilter,
-    placeTagOptions, addPlaceToDayPlan, selectedDate, isInitializing
+    placeTagOptions, addPlaceToDayPlan, selectedDate, isInitializing, timezone
   } = useTrip();
 
   if (isInitializing) {
@@ -58,7 +58,12 @@ export default function SpotsItinerary() {
     <div className="flex flex-col p-3 overflow-y-auto min-h-0 scrollbar-thin">
       <div className="flex items-start justify-between gap-2 mb-2.5 flex-wrap">
         <div>
-          <h2 className="m-0 text-base font-bold tracking-tight">Curated Spots {selectedDate ? `· ${formatDateDayMonth(selectedDate)}` : ''}</h2>
+          <h2
+            className="m-0 text-sm font-semibold"
+            style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk', sans-serif)" }}
+          >
+            Curated Spots {selectedDate ? `· ${formatDateDayMonth(selectedDate, timezone)}` : ''}
+          </h2>
           <div className="flex gap-1.5 items-center mt-1">
             <ToggleGroup
               className="flex flex-nowrap overflow-x-auto gap-1.5 scrollbar-none"
@@ -83,7 +88,14 @@ export default function SpotsItinerary() {
               const safeMapLink = getSafeExternalHref(place.mapLink);
               const safeCornerLink = getSafeExternalHref(place.cornerLink);
               return (
-                <Card className="p-3.5 hover:border-accent-border hover:shadow-[0_0_0_3px_var(--color-accent-glow)]" key={place.id || `${place.name}-${place.location}`}>
+                <Card
+                  className="p-3.5 hover:border-accent-border hover:shadow-[0_0_0_3px_var(--color-accent-glow)]"
+                  key={place.id || `${place.name}-${place.location}`}
+                  style={{
+                    borderLeft: normalizePlaceTag(place.tag) === 'safe' ? '3px solid rgba(0, 232, 123, 0.3)' :
+                                normalizePlaceTag(place.tag) === 'avoid' ? '3px solid rgba(239, 68, 68, 0.3)' : undefined,
+                  }}
+                >
                   <div className="flex gap-2 justify-between items-start">
                     <h3 className="m-0 mb-1.5 text-[0.92rem] font-semibold leading-snug">{place.name}</h3>
                     <Badge className="uppercase tracking-wider shrink-0" variant="secondary" style={{ backgroundColor: `${getTagColor(place.tag)}22`, color: getTagColor(place.tag) }}>{formatTag(place.tag)}</Badge>

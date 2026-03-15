@@ -47,7 +47,7 @@ export default function EventsItinerary() {
   const {
     selectedDate, showAllEvents, setShowAllEvents,
     visibleEvents, travelReadyCount, addEventToDayPlan,
-    isInitializing
+    isInitializing, timezone
   } = useTrip();
 
   if (isInitializing) {
@@ -58,7 +58,12 @@ export default function EventsItinerary() {
     <div className="flex flex-col p-3 overflow-y-auto min-h-0 scrollbar-thin">
       <div className="flex items-start justify-between gap-2 mb-2.5 flex-wrap">
         <div>
-          <h2 className="m-0 text-base font-bold tracking-tight">Events {selectedDate ? `· ${formatDateDayMonth(selectedDate)}` : ''}</h2>
+          <h2
+            className="m-0 text-sm font-semibold"
+            style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk', sans-serif)" }}
+          >
+            Events {selectedDate ? `· ${formatDateDayMonth(selectedDate, timezone)}` : ''}
+          </h2>
           <div className="flex gap-1.5 items-center mt-1">
             <ToggleGroup
               className="flex flex-nowrap overflow-x-auto gap-1.5 scrollbar-none"

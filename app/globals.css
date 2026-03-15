@@ -23,6 +23,8 @@
   --color-danger: #FF4444;
   --color-danger-light: rgba(255, 68, 68, 0.08);
   --color-danger-border: rgba(255, 68, 68, 0.3);
+  --color-blue: #3B82F6;
+  --color-purple: #A855F7;
 }
 
 @layer base {
@@ -42,6 +44,26 @@
 @keyframes selectSlideIn {
   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dateRangeSlideIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dateRangeMonthLeft {
+  from { opacity: 0.4; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes dateRangeMonthRight {
+  from { opacity: 0.4; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.08; }
+}
+.skeleton-pulse {
+  background: #FFFFFF;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
 }
 
 /* Planner time grid -- too structural for pure Tailwind */
@@ -79,8 +101,8 @@
 .planner-item-active { box-shadow: 0 0 0 3px var(--color-accent-glow); }
 .planner-item-event { background: rgba(255, 136, 0, 0.10); border-color: rgba(255, 136, 0, 0.3); }
 .planner-item-place { background: rgba(0, 255, 136, 0.06); border-color: rgba(0, 255, 136, 0.2); }
-.planner-item-owner-mine { background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.35); }
-.planner-item-owner-partner { background: rgba(64, 140, 255, 0.12); border-color: rgba(64, 140, 255, 0.4); }
+.planner-item-owner-mine { background: rgba(0, 255, 136, 0.06); border-left: 3px solid #00E87B; }
+.planner-item-owner-partner { background: rgba(245, 158, 11, 0.06); border-left: 3px solid rgba(245, 158, 11, 0.6); }
 
 /* Google Maps container needs absolute positioning */
 #map { position: absolute; inset: 0; background: #141414; }
@@ -167,3 +189,4 @@
   .map-container-responsive { height: 40vh; min-height: 40vh; }
   .planner-calendar { flex: 1; min-height: 300px; }
 }
+

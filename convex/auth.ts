@@ -20,7 +20,7 @@ function brandedEmailHtml(url: string) {
         &#x1F4CD;
       </td>
       <td style="padding-left:12px;">
-        <div style="font-size:16px;font-weight:600;color:#FFFFFF;letter-spacing:1px;">SF TRIP PLANNER</div>
+        <div style="font-size:16px;font-weight:600;color:#FFFFFF;letter-spacing:1px;">TRIP PLANNER</div>
         <div style="font-size:11px;font-weight:500;color:#8a8a8a;letter-spacing:1px;margin-top:2px;">// MISSION_CONTROL</div>
       </td>
     </tr></table>
@@ -33,7 +33,7 @@ function brandedEmailHtml(url: string) {
 
       <!-- Header -->
       <div style="font-size:11px;font-weight:500;color:#8a8a8a;letter-spacing:1px;margin-bottom:8px;">// AUTHENTICATION</div>
-      <div style="font-size:18px;font-weight:600;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;margin-bottom:8px;">Sign in to SF Trip Planner</div>
+      <div style="font-size:18px;font-weight:600;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;margin-bottom:8px;">Sign in to Trip Planner</div>
       <div style="font-size:13px;font-weight:400;color:#8a8a8a;line-height:1.5;margin-bottom:24px;">Click below to securely access your trip planner. This link expires in 1 hour.</div>
 
       <!-- CTA Button -->
@@ -80,9 +80,9 @@ const resendProvider = Email({
   async sendVerificationRequest({ identifier: email, url, provider }) {
     const host = new URL(url).host;
     const basePayload = {
-      from: authEmailFrom || 'SF Trip Planner <onboarding@resend.dev>',
+      from: authEmailFrom || 'Trip Planner <onboarding@resend.dev>',
       to: email,
-      subject: 'Sign in to SF Trip Planner',
+      subject: 'Sign in to Trip Planner',
     };
     const payload = authResendTemplateId
       ? {
@@ -90,7 +90,7 @@ const resendProvider = Email({
           template: {
             id: authResendTemplateId,
             variables: {
-              APP_NAME: 'SF Trip Planner',
+              APP_NAME: 'Trip Planner',
               HOST: host,
               SIGN_IN_URL: url,
               YEAR: String(new Date().getUTCFullYear()),
@@ -100,7 +100,7 @@ const resendProvider = Email({
       : {
           ...basePayload,
           html: brandedEmailHtml(url),
-          text: `Sign in to SF Trip Planner\n\n${url}\n\nIf you didn't request this, ignore it.`,
+          text: `Sign in to Trip Planner\n\n${url}\n\nIf you didn't request this, ignore it.`,
         };
 
     const res = await fetch('https://api.resend.com/emails', {

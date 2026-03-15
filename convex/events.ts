@@ -19,6 +19,7 @@ const eventValidator = v.object({
   confidence: v.optional(v.number())
 });
 const eventRecordValidator = v.object({
+  cityId: v.string(),
   id: v.string(),
   name: v.string(),
   description: v.string(),
@@ -60,11 +61,16 @@ const upsertEventsResultValidator = v.object({
 });
 
 export const listEvents = query({
-  args: {},
+  args: {
+    cityId: v.string()
+  },
   returns: v.array(eventRecordValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
-    const events = await ctx.db.query('events').collect();
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_city', (q) => q.eq('cityId', args.cityId))
+      .collect();
 
     return events
       .filter((event) => !event.isDeleted)
@@ -78,11 +84,14 @@ export const listEvents = query({
 });
 
 export const getSyncMeta = query({
-  args: {},
+  args: {
+    cityId: v.string()
+  },
   returns: v.union(v.null(), syncMetaValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
-    const row = await ctx.db.query('syncMeta').withIndex('by_key', (q) => q.eq('key', 'events')).first();
+    const metaKey = `${args.cityId}:events`;
+    const row = await ctx.db.query('syncMeta').withIndex('by_key', (q) => q.eq('key', metaKey)).first();
 
     if (!row) {
       return null;
@@ -166,6 +175,7 @@ export const upsertGeocode = mutation({
 
 export const upsertEvents = mutation({
   args: {
+    cityId: v.string(),
     events: v.array(eventValidator),
     syncedAt: v.string(),
     calendars: v.array(v.string()),
@@ -177,7 +187,10 @@ export const upsertEvents = mutation({
 
     const missedSyncThreshold = Math.max(1, Number(args.missedSyncThreshold) || 2);
     const keepUrls = new Set(args.events.map((event) => event.eventUrl));
-    const existingRows = await ctx.db.query('events').collect();
+    const existingRows = await ctx.db
+      .query('events')
+      .withIndex('by_city', (q) => q.eq('cityId', args.cityId))
+      .collect();
     const existingByUrl = new Map(existingRows.map((row) => [row.eventUrl, row]));
 
     for (const row of existingRows) {
@@ -196,6 +209,7 @@ export const upsertEvents = mutation({
     for (const event of args.events) {
       const existing = existingByUrl.get(event.eventUrl);
       const nextEvent = {
+        cityId: args.cityId,
         ...event,
         missedSyncCount: 0,
         isDeleted: false,
@@ -210,13 +224,14 @@ export const upsertEvents = mutation({
       }
     }
 
+    const metaKey = `${args.cityId}:events`;
     const existingMeta = await ctx.db
       .query('syncMeta')
-      .withIndex('by_key', (q) => q.eq('key', 'events'))
+      .withIndex('by_key', (q) => q.eq('key', metaKey))
       .first();
 
     const nextMeta = {
-      key: 'events',
+      key: metaKey,
       syncedAt: args.syncedAt,
       calendars: args.calendars,
       eventCount: args.events.length

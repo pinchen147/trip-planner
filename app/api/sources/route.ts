@@ -3,9 +3,11 @@ import { runWithOwnerClient } from '@/lib/api-guards';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request) {
   return runWithOwnerClient(async () => {
-    const payload = await loadSourcesPayload();
+    const url = new URL(request.url);
+    const cityId = url.searchParams.get('cityId') || '';
+    const payload = await loadSourcesPayload(cityId);
     return Response.json(payload);
   });
 }

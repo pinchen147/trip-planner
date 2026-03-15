@@ -1,69 +1,99 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import MapPanel from '@/components/MapPanel';
+import StatusBar from '@/components/StatusBar';
+import TripSelector from '@/components/TripSelector';
 import { useTrip } from '@/components/providers/TripProvider';
+import Link from 'next/link';
 import {
-  Calendar, Coffee, MapPin, Navigation, RefreshCw
+  Calendar, Compass, LayoutGrid, MapPin, Navigation, RefreshCw, Settings
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'map', href: '/map', icon: MapPin, label: 'Map' },
-  { id: 'calendar', href: '/calendar', icon: Calendar, label: 'Calendar' },
-  { id: 'planning', href: '/planning', icon: Navigation, label: 'Planning' },
-  { id: 'spots', href: '/spots', icon: Coffee, label: 'Spots' },
-  { id: 'config', href: '/config', icon: RefreshCw, label: 'Config' }
+  { id: 'planning', icon: Navigation, label: 'PLANNING' },
+  { id: 'spots', icon: Compass, label: 'SPOTS' },
+  { id: 'calendar', icon: Calendar, label: 'CALENDAR' },
+  { id: 'config', icon: Settings, label: 'CONFIG' }
 ];
 
-const MAP_TABS = new Set(['map', 'planning', 'spots']);
+const MAP_TABS = new Set(['planning', 'spots']);
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const {
-    isSyncing, handleSync, handleDeviceLocation, canManageGlobal
+    isSyncing, handleSync, canManageGlobal, currentTripUrlId
   } = useTrip();
 
-  const activeId = NAV_ITEMS.find((n) => pathname.startsWith(n.href))?.id || 'planning';
+  const segments = pathname.split('/');
+  // /trips/{urlId}/{tab} → tab is segments[3]
+  const activeId = segments[3] || 'planning';
   const showMap = MAP_TABS.has(activeId);
   const hasMapSidebar = activeId !== 'map' && showMap;
   const canSync = canManageGlobal;
-  const syncLabel = isSyncing ? 'Syncing...' : canSync ? 'Sync' : 'Owner only';
 
   return (
     <main className="min-h-dvh h-dvh flex flex-col w-full overflow-hidden">
-      <header className="flex items-center gap-3 px-5 h-[52px] min-h-[52px] border-b border-border bg-[#080808] relative z-30 topbar-responsive">
-        <h1 className="m-0 text-lg font-extrabold tracking-tight shrink-0 text-foreground uppercase" style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk'), sans-serif" }}>SF TRIP PLANNER</h1>
-        <nav className="flex items-center gap-0.5 mx-auto overflow-x-auto scrollbar-none topbar-nav-responsive" aria-label="App navigator">
-          {NAV_ITEMS.map(({ id, href, icon: Icon, label }) => (
-            <button
-              key={id}
-              type="button"
-              className={`inline-flex items-center gap-1 px-3.5 py-1.5 border-none rounded-none text-[0.72rem] font-bold uppercase tracking-wider cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 topbar-nav-item-responsive ${activeId === id ? 'text-accent border-b-2 border-b-accent' : 'bg-transparent text-muted hover:text-foreground'}`}
-              onClick={() => router.push(href)}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
-        </nav>
-        <div className="flex gap-1.5 shrink-0 topbar-actions-responsive">
-          <Button
-            id="sync-button"
+      <header className="flex items-center justify-between px-6 h-[52px] min-h-[52px] border-b border-border bg-[#080808] relative z-30 topbar-responsive">
+        <div className="flex items-center gap-5 h-full">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-[15px] font-bold tracking-wide text-[#F5F5F5] shrink-0 no-underline hover:text-[#00E87B] transition-colors"
+            style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk', sans-serif)", letterSpacing: 1 }}
+          >
+            <LayoutGrid size={14} className="text-[#525252]" />
+            TRIP PLANNER
+          </Link>
+          <nav className="flex items-center h-full overflow-x-auto scrollbar-none topbar-nav-responsive" aria-label="App navigator">
+            {NAV_ITEMS.map(({ id, icon: Icon, label }) => {
+              const href = `/trips/${currentTripUrlId}/${id}`;
+              const isActive = activeId === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="relative inline-flex items-center gap-1.5 h-full px-3.5 border-none rounded-none cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 topbar-nav-item-responsive bg-transparent"
+                  style={{
+                    fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)",
+                    fontSize: 11,
+                    fontWeight: isActive ? 600 : 500,
+                    letterSpacing: 0.5,
+                    color: isActive ? '#00E87B' : '#525252',
+                  }}
+                  onClick={() => router.push(href)}
+                >
+                  <Icon size={13} />
+                  {label}
+                  {isActive && (
+                    <div className="absolute bottom-0 left-3 right-3 h-0.5" style={{ background: '#00E87B' }} />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+        <div className="flex items-center gap-3 shrink-0 topbar-actions-responsive">
+          {/* Trip / City Selector */}
+          <TripSelector />
+          {/* Sync Button */}
+          <button
             type="button"
-            size="sm"
             onClick={handleSync}
             disabled={isSyncing || !canSync}
-            title={canSync ? 'Sync events and spots' : 'Owner role required'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-transparent transition-colors"
+            style={{
+              background: '#111111',
+              border: '1px solid #262626',
+              fontFamily: "var(--font-jetbrains, 'JetBrains Mono', monospace)",
+              fontSize: 10,
+              fontWeight: 500,
+              color: '#525252',
+            }}
           >
-            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-            {syncLabel}
-          </Button>
-          <Button variant="secondary" id="use-device-location" type="button" size="sm" onClick={handleDeviceLocation}>
-            <Navigation size={14} />
-            My Location
-          </Button>
+            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+            SYNC
+          </button>
         </div>
       </header>
       <div className={`min-h-0 flex-1 grid items-stretch ${hasMapSidebar ? 'layout-sidebar grid-cols-[minmax(0,3fr)_5fr]' : showMap ? 'grid-cols-1' : ''}`} style={showMap ? undefined : { display: 'contents' }}>
@@ -72,6 +102,7 @@ export default function AppShell({ children }) {
         </div>
         {children}
       </div>
+      <StatusBar />
     </main>
   );
 }

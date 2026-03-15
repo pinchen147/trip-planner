@@ -10,9 +10,11 @@ export function createGetEventsHandler(deps: EventsApiDeps = {}) {
   const runWithAuthenticatedClient = deps.runWithAuthenticatedClient || runWithAuthenticatedClientDefault;
   const loadEventsPayload = deps.loadEventsPayload || loadEventsPayloadDefault;
 
-  return async function GET() {
+  return async function GET(request: Request) {
     return runWithAuthenticatedClient(async () => {
-      const payload = await loadEventsPayload();
+      const url = new URL(request.url);
+      const cityId = url.searchParams.get('cityId') || '';
+      const payload = await loadEventsPayload(cityId);
       return Response.json(payload);
     });
   };

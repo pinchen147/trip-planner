@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next';
 import { ConvexAuthNextjsServerProvider } from '@convex-dev/auth/nextjs/server';
 import Script from 'next/script';
 import ConvexClientProvider from '@/components/providers/ConvexClientProvider';
+import CookieConsent from '@/components/CookieConsent';
 import './globals.css';
 
 const inter = Inter({
@@ -25,26 +26,26 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata = {
   title: {
-    default: 'SF Trip Planner',
-    template: '%s | SF Trip Planner',
+    default: 'Trip Planner',
+    template: '%s | Trip Planner',
   },
   description:
-    'Plan your San Francisco trip with events, curated spots, and live crime heatmaps on one map. Free and open source.',
-  metadataBase: new URL('https://sf.ianhsiao.me'),
+    'Plan your trip with events, curated spots, and live crime heatmaps on one map. Free and open source.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://trip.ianhsiao.me'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'SF Trip Planner',
-    description: 'Events, spots, and safety on one map. Plan your SF trip free.',
-    siteName: 'SF Trip Planner',
+    title: 'Trip Planner',
+    description: 'Events, spots, and safety on one map. Plan your trip free.',
+    siteName: 'Trip Planner',
     type: 'website',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SF Trip Planner',
-    description: 'Events, spots, and safety on one map. Plan your SF trip free.',
+    title: 'Trip Planner',
+    description: 'Events, spots, and safety on one map. Plan your trip free.',
     creator: '@ianhsiao',
   },
 };
@@ -58,6 +59,7 @@ export default function RootLayout({ children }) {
         <ConvexAuthNextjsServerProvider>
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </ConvexAuthNextjsServerProvider>
+        <CookieConsent />
         <Analytics />
         {buyMeACoffeeId ? (
           <Script

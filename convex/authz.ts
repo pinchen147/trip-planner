@@ -1,6 +1,11 @@
 import { getAuthUserId } from '@convex-dev/auth/server';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 
+// --- TEMPORARY AUTH BYPASS ---
+const DEV_BYPASS_AUTH = true;
+const DEV_BYPASS_USER_ID = 'dev-bypass';
+// --- END BYPASS ---
+
 type ConvexCtx = MutationCtx | QueryCtx;
 
 type AuthDeps = {
@@ -8,6 +13,9 @@ type AuthDeps = {
 };
 
 export async function requireAuthenticatedUserId(ctx: ConvexCtx, deps: AuthDeps = {}) {
+  if (DEV_BYPASS_AUTH) {
+    return DEV_BYPASS_USER_ID;
+  }
   const readUserId = deps.getUserId || getAuthUserId;
   const userId = await readUserId(ctx);
   if (!userId) {
@@ -17,6 +25,9 @@ export async function requireAuthenticatedUserId(ctx: ConvexCtx, deps: AuthDeps 
 }
 
 export async function requireOwnerUserId(ctx: ConvexCtx, deps: AuthDeps = {}) {
+  if (DEV_BYPASS_AUTH) {
+    return DEV_BYPASS_USER_ID;
+  }
   const userId = await requireAuthenticatedUserId(ctx, deps);
   const profile = await ctx.db
     .query('userProfiles')

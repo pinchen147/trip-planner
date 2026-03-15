@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const runtime = 'nodejs';
-export const alt = 'SF Travel Planner — See events, spots, and safety on one map';
+export const alt = 'Trip Planner — See events, spots, and safety on one map';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -53,7 +53,7 @@ export default async function OgImage() {
               letterSpacing: '-1px',
             }}
           >
-            SF Travel Planner
+            Trip Planner
           </div>
 
           <div
@@ -81,7 +81,7 @@ export default async function OgImage() {
               letterSpacing: '0.5px',
             }}
           >
-            sf.ianhsiao.me
+            trip.ianhsiao.me
           </div>
 
           {/* Tagline */}

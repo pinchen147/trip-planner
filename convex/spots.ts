@@ -19,6 +19,7 @@ const spotValidator = v.object({
   confidence: v.optional(v.number())
 });
 const spotRecordValidator = v.object({
+  cityId: v.string(),
   id: v.string(),
   name: v.string(),
   tag: v.string(),
@@ -50,11 +51,16 @@ const upsertSpotsResultValidator = v.object({
 });
 
 export const listSpots = query({
-  args: {},
+  args: {
+    cityId: v.string()
+  },
   returns: v.array(spotRecordValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
-    const rows = await ctx.db.query('spots').collect();
+    const rows = await ctx.db
+      .query('spots')
+      .withIndex('by_city', (q) => q.eq('cityId', args.cityId))
+      .collect();
 
     return rows
       .filter((spot) => !spot.isDeleted)
@@ -64,11 +70,14 @@ export const listSpots = query({
 });
 
 export const getSyncMeta = query({
-  args: {},
+  args: {
+    cityId: v.string()
+  },
   returns: v.union(v.null(), syncMetaValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
-    const row = await ctx.db.query('syncMeta').withIndex('by_key', (q) => q.eq('key', 'spots')).first();
+    const metaKey = `${args.cityId}:spots`;
+    const row = await ctx.db.query('syncMeta').withIndex('by_key', (q) => q.eq('key', metaKey)).first();
 
     if (!row) {
       return null;
@@ -81,6 +90,7 @@ export const getSyncMeta = query({
 
 export const upsertSpots = mutation({
   args: {
+    cityId: v.string(),
     spots: v.array(spotValidator),
     syncedAt: v.string(),
     sourceUrls: v.array(v.string()),
@@ -92,7 +102,10 @@ export const upsertSpots = mutation({
 
     const missedSyncThreshold = Math.max(1, Number(args.missedSyncThreshold) || 2);
     const keepIds = new Set(args.spots.map((spot) => spot.id));
-    const existingRows = await ctx.db.query('spots').collect();
+    const existingRows = await ctx.db
+      .query('spots')
+      .withIndex('by_city', (q) => q.eq('cityId', args.cityId))
+      .collect();
     const existingById = new Map(existingRows.map((row) => [row.id, row]));
 
     for (const row of existingRows) {
@@ -111,6 +124,7 @@ export const upsertSpots = mutation({
     for (const spot of args.spots) {
       const existing = existingById.get(spot.id);
       const nextSpot = {
+        cityId: args.cityId,
         ...spot,
         missedSyncCount: 0,
         isDeleted: false,
@@ -125,13 +139,14 @@ export const upsertSpots = mutation({
       }
     }
 
+    const metaKey = `${args.cityId}:spots`;
     const existingMeta = await ctx.db
       .query('syncMeta')
-      .withIndex('by_key', (q) => q.eq('key', 'spots'))
+      .withIndex('by_key', (q) => q.eq('key', metaKey))
       .first();
 
     const nextMeta = {
-      key: 'spots',
+      key: metaKey,
       syncedAt: args.syncedAt,
       calendars: args.sourceUrls,
       eventCount: args.spots.length

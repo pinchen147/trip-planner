@@ -1,21 +1,17 @@
 import { consumeRateLimit, getRequestRateLimitIp } from '@/lib/security';
+import {
+  getCrimeCityConfig,
+  getDefaultCrimeCitySlug,
+  type CrimeCityFieldMap,
+} from '@/lib/crime-cities';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DATASET_ID = 'wg3w-h783';
-const DATASET_URL = `https://data.sfgov.org/resource/${DATASET_ID}.json`;
 const DEFAULT_HOURS = 24;
 const MAX_HOURS = 7 * 24;
 const DEFAULT_LIMIT = 4000;
 const MAX_LIMIT = 10000;
-const EXCLUDED_CATEGORIES = [
-  'Non-Criminal',
-  'Case Closure',
-  'Lost Property',
-  'Courtesy Report',
-  'Recovered Vehicle'
-];
 
 type CrimeBounds = {
   south: number;
@@ -56,34 +52,42 @@ function parseCrimeBounds(searchParams: URLSearchParams): CrimeBounds | null {
   };
 }
 
-function buildIncidentWhereClause(sinceDateISO: string, bounds: CrimeBounds | null) {
-  const excluded = EXCLUDED_CATEGORIES.map(sqlStringLiteral).join(', ');
+function buildIncidentWhereClause(
+  fields: CrimeCityFieldMap,
+  dateFilterField: string,
+  excludedCategories: string[],
+  sinceDateISO: string,
+  bounds: CrimeBounds | null
+) {
   const clauses = [
-    `incident_date >= ${sqlStringLiteral(sinceDateISO)}`,
-    'latitude IS NOT NULL',
-    'longitude IS NOT NULL',
-    `incident_category NOT IN (${excluded})`
+    `${dateFilterField} >= ${sqlStringLiteral(sinceDateISO)}`,
+    `${fields.latitude} IS NOT NULL`,
+    `${fields.longitude} IS NOT NULL`,
   ];
+  if (excludedCategories.length > 0) {
+    const excluded = excludedCategories.map(sqlStringLiteral).join(', ');
+    clauses.push(`${fields.category} NOT IN (${excluded})`);
+  }
   if (bounds) {
-    clauses.push(`latitude >= ${bounds.south} AND latitude <= ${bounds.north}`);
-    clauses.push(`longitude >= ${bounds.west} AND longitude <= ${bounds.east}`);
+    clauses.push(`${fields.latitude} >= ${bounds.south} AND ${fields.latitude} <= ${bounds.north}`);
+    clauses.push(`${fields.longitude} >= ${bounds.west} AND ${fields.longitude} <= ${bounds.east}`);
   }
   return clauses.join(' AND ');
 }
 
-function normalizeIncident(row: any, sinceComparableISO: string) {
-  const lat = Number(row?.latitude);
-  const lng = Number(row?.longitude);
+function normalizeIncident(row: any, fields: CrimeCityFieldMap, sinceComparableISO: string) {
+  const lat = Number(row?.[fields.latitude]);
+  const lng = Number(row?.[fields.longitude]);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const incidentDatetime = String(row?.incident_datetime || '');
+  const incidentDatetime = String(row?.[fields.datetime] || '');
   if (incidentDatetime && incidentDatetime < sinceComparableISO) return null;
   return {
     lat,
     lng,
     incidentDatetime,
-    incidentCategory: String(row?.incident_category || ''),
-    incidentSubcategory: String(row?.incident_subcategory || ''),
-    neighborhood: String(row?.analysis_neighborhood || '')
+    incidentCategory: String(row?.[fields.category] || ''),
+    incidentSubcategory: fields.subcategory ? String(row?.[fields.subcategory] || '') : '',
+    neighborhood: fields.neighborhood ? String(row?.[fields.neighborhood] || '') : ''
   };
 }
 
@@ -108,26 +112,46 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
+  const citySlug = url.searchParams.get('city') || getDefaultCrimeCitySlug();
+  const cityConfig = getCrimeCityConfig(citySlug);
+  if (!cityConfig) {
+    return Response.json(
+      { error: `Unsupported city: ${citySlug}` },
+      { status: 400 }
+    );
+  }
+
+  const { fields } = cityConfig;
   const hours = clampInteger(url.searchParams.get('hours'), DEFAULT_HOURS, 1, MAX_HOURS);
   const limit = clampInteger(url.searchParams.get('limit'), DEFAULT_LIMIT, 200, MAX_LIMIT);
   const bounds = parseCrimeBounds(url.searchParams);
   const sinceISO = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const sinceComparableISO = sinceISO.replace('Z', '');
   const sinceDateISO = `${sinceISO.slice(0, 10)}T00:00:00.000`;
-  const whereClause = buildIncidentWhereClause(sinceDateISO, bounds);
-
-  const queryUrl = new URL(DATASET_URL);
-  queryUrl.searchParams.set(
-    '$select',
-    'incident_datetime,incident_category,incident_subcategory,analysis_neighborhood,latitude,longitude'
+  const whereClause = buildIncidentWhereClause(
+    fields,
+    cityConfig.dateFilterField,
+    cityConfig.excludedCategories,
+    sinceDateISO,
+    bounds
   );
+
+  const datasetUrl = `https://${cityConfig.host}/resource/${cityConfig.datasetId}.json`;
+  const queryUrl = new URL(datasetUrl);
+  const selectFields = [
+    fields.datetime, fields.category,
+    fields.subcategory, fields.neighborhood,
+    fields.latitude, fields.longitude
+  ].filter(Boolean).join(',');
+  queryUrl.searchParams.set('$select', selectFields);
   queryUrl.searchParams.set('$where', whereClause);
-  queryUrl.searchParams.set('$order', 'incident_datetime DESC');
+  queryUrl.searchParams.set('$order', `${fields.datetime} DESC`);
   queryUrl.searchParams.set('$limit', String(limit));
 
   const requestHeaders: Record<string, string> = {};
-  if (process.env.SFGOV_APP_TOKEN) {
-    requestHeaders['X-App-Token'] = process.env.SFGOV_APP_TOKEN;
+  const appToken = process.env[cityConfig.appTokenEnvVar];
+  if (appToken) {
+    requestHeaders['X-App-Token'] = appToken;
   }
 
   const upstream = await fetch(queryUrl.toString(), {
@@ -139,7 +163,7 @@ export async function GET(request: Request) {
     const body = await upstream.text().catch(() => '');
     return Response.json(
       {
-        error: `Upstream SF Open Data request failed (${upstream.status}).`,
+        error: `Upstream ${cityConfig.label} open data request failed (${upstream.status}).`,
         details: body.slice(0, 300)
       },
       { status: 502 }
@@ -148,7 +172,7 @@ export async function GET(request: Request) {
 
   const rows = await upstream.json().catch(() => []);
   const incidents = Array.isArray(rows)
-    ? rows.map((row: any) => normalizeIncident(row, sinceComparableISO)).filter(Boolean)
+    ? rows.map((row: any) => normalizeIncident(row, fields, sinceComparableISO)).filter(Boolean)
     : [];
 
   return Response.json(
@@ -158,9 +182,9 @@ export async function GET(request: Request) {
       limit,
       count: incidents.length,
       source: {
-        provider: 'SF Open Data',
-        datasetId: DATASET_ID,
-        datasetUrl: `https://data.sfgov.org/d/${DATASET_ID}`
+        provider: cityConfig.providerName,
+        datasetId: cityConfig.datasetId,
+        datasetUrl: `${cityConfig.portalBaseUrl}/d/${cityConfig.datasetId}`
       },
       bounds,
       generatedAt: new Date().toISOString()

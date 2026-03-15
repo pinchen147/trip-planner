@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from 'convex/react';
+import { useParams } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { __iconNode as calendarIconNode } from 'lucide-react/dist/esm/icons/calendar.js';
 import { __iconNode as coffeeIconNode } from 'lucide-react/dist/esm/icons/coffee.js';
@@ -38,7 +39,7 @@ import {
   loadGoogleMapsScript, buildInfoWindowAddButton
 } from '@/lib/map-helpers';
 
-const TAG_COLORS = {
+const TAG_COLORS: Record<PlaceTag, string> = {
   eat: '#FF8800',
   bar: '#A78BFA',
   cafes: '#60A5FA',
@@ -53,7 +54,7 @@ const CRIME_HEATMAP_LIMIT = 6000;
 const CRIME_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const CRIME_IDLE_DEBOUNCE_MS = 450;
 const CRIME_MIN_REQUEST_INTERVAL_MS = 20 * 1000;
-const DEFAULT_CRIME_HEATMAP_STRENGTH = 'high';
+const DEFAULT_CRIME_HEATMAP_STRENGTH: HeatmapStrength = 'high';
 const CRIME_HEATMAP_GRADIENT = [
   'rgba(0, 0, 0, 0)',
   'rgba(254, 202, 202, 0.06)',
@@ -64,16 +65,20 @@ const CRIME_HEATMAP_GRADIENT = [
   'rgba(127, 29, 29, 0.96)'
 ];
 
+const DEFAULT_CRIME_CITY_SLUG = 'san-francisco';
+const DEFAULT_MAP_CENTER = { lat: 37.7749, lng: -122.4194 };
+
+
 function getCrimeCategoryWeight(category) {
   const c = String(category || '').toLowerCase();
   if (!c) return 1;
-  if (c.includes('homicide') || c.includes('human trafficking')) return 4.2;
-  if (c.includes('rape') || c.includes('sex offense')) return 3.8;
+  if (c.includes('homicide') || c.includes('murder') || c.includes('human trafficking')) return 4.2;
+  if (c.includes('rape') || c.includes('sex offense') || c.includes('sex crime')) return 3.8;
   if (c.includes('assault') || c.includes('robbery')) return 3.2;
   if (c.includes('weapons') || c.includes('arson') || c.includes('kidnapping')) return 2.8;
-  if (c.includes('burglary') || c.includes('motor vehicle theft')) return 2.3;
+  if (c.includes('burglary') || c.includes('motor vehicle theft') || (c.includes('vehicle') && c.includes('stolen'))) return 2.3;
   if (c.includes('theft') || c.includes('larceny')) return 1.8;
-  if (c.includes('vandalism') || c.includes('vehicle')) return 1.6;
+  if (c.includes('vandalism') || c.includes('criminal mischief') || c.includes('criminal damage')) return 1.6;
   return 1.2;
 }
 
@@ -82,7 +87,7 @@ function getCrimeHeatmapRadiusForZoom(zoom) {
   return Math.max(16, Math.min(34, Math.round(46 - zoomLevel * 1.9)));
 }
 
-function getCrimeHeatmapProfile(strength) {
+function getCrimeHeatmapProfile(strength: HeatmapStrength) {
   if (strength === 'high') {
     return { weightMultiplier: 1.85, opacity: 0.9, maxIntensity: 2.9, radiusScale: 1.08 };
   }
@@ -112,12 +117,7 @@ function buildCrimeBoundsQuery(map) {
   return params.toString();
 }
 
-type CrimeLayerMeta = {
-  loading: boolean;
-  count: number;
-  generatedAt: string;
-  error: string;
-};
+import type { PlaceTag, HeatmapStrength, TravelMode, PlannerViewMode, CrimeLayerMeta, PlanItem } from '@/lib/types';
 
 const EMPTY_CRIME_LAYER_META: CrimeLayerMeta = {
   loading: false,
@@ -219,6 +219,7 @@ export function useTrip() {
 export default function TripProvider({ children }: { children: ReactNode }) {
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
+  const params = useParams();
   const mapPanelRef = useRef<any>(null);
   const sidebarRef = useRef<any>(null);
   const mapElementRef = useRef<any>(null);
@@ -233,6 +234,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   const crimeHeatmapRef = useRef<any>(null);
   const crimeRefreshTimerRef = useRef<number | null>(null);
   const crimeIdleListenerRef = useRef<any>(null);
+  const currentCityRef = useRef<any>(null);
   const lastCrimeFetchAtRef = useRef(0);
   const lastCrimeQueryRef = useRef('');
   const positionCacheRef = useRef<Map<string, any>>(new Map());
@@ -244,7 +246,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState('Loading trip map...');
   const [statusError, setStatusError] = useState(false);
   const [crimeLayerMeta, setCrimeLayerMeta] = useState<CrimeLayerMeta>(EMPTY_CRIME_LAYER_META);
-  const [crimeHeatmapStrength, setCrimeHeatmapStrength] = useState(DEFAULT_CRIME_HEATMAP_STRENGTH);
+  const [crimeHeatmapStrength, setCrimeHeatmapStrength] = useState<HeatmapStrength>(DEFAULT_CRIME_HEATMAP_STRENGTH);
   const [mapsReady, setMapsReady] = useState(false);
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [allPlaces, setAllPlaces] = useState<any[]>([]);
@@ -252,7 +254,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   const [visiblePlaces, setVisiblePlaces] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [showAllEvents, setShowAllEvents] = useState(true);
-  const [travelMode, setTravelMode] = useState('WALKING');
+  const [travelMode, setTravelMode] = useState<TravelMode>('WALKING');
   const [baseLocationText, setBaseLocationText] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -262,13 +264,13 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   const [calendarMonthISO, setCalendarMonthISO] = useState('');
   const [plannerByDateMine, setPlannerByDateMine] = useState<Record<string, any[]>>({});
   const [plannerByDatePartner, setPlannerByDatePartner] = useState<Record<string, any[]>>({});
-  const [plannerViewMode, setPlannerViewMode] = useState('merged');
+  const [plannerViewMode, setPlannerViewMode] = useState<PlannerViewMode>('merged');
   const [activePlanId, setActivePlanId] = useState('');
   const [routeSummary, setRouteSummary] = useState('');
   const [isRouteUpdating, setIsRouteUpdating] = useState(false);
   const [baseLocationVersion, setBaseLocationVersion] = useState(0);
   const [sources, setSources] = useState<any[]>([]);
-  const [newSourceType, setNewSourceType] = useState('event');
+  const [newSourceType, setNewSourceType] = useState<'event' | 'place'>('event');
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceLabel, setNewSourceLabel] = useState('');
   const [isSavingSource, setIsSavingSource] = useState(false);
@@ -282,6 +284,14 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   const [authUserId, setAuthUserId] = useState('');
   const [isPairActionPending, setIsPairActionPending] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [currentTripId, setCurrentTripId] = useState('');
+  const [currentTripUrlId, setCurrentTripUrlId] = useState('');
+  const [currentCityId, setCurrentCityId] = useState('');
+  const [trips, setTrips] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [currentCity, setCurrentCity] = useState<any>(null);
+  const [timezone, setTimezone] = useState('America/Los_Angeles');
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
 
   const plannerByDate = useMemo(
     () => mergePlannerByDate(plannerByDateMine, plannerByDatePartner),
@@ -437,9 +447,10 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const queryString = currentPairRoomId
-          ? `?roomCode=${encodeURIComponent(currentPairRoomId)}`
-          : '';
+        const params = new URLSearchParams();
+        if (currentTripId) params.set('tripId', currentTripId);
+        if (currentPairRoomId) params.set('roomCode', currentPairRoomId);
+        const queryString = params.toString() ? `?${params.toString()}` : '';
         const payload = await fetchJson(`/api/planner${queryString}`);
         if (!mounted) return;
 
@@ -475,15 +486,20 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       mounted = false;
       plannerHydratedRef.current = true;
     };
-  }, [authUserId, currentPairRoomId, isAuthenticated]);
+  }, [authUserId, currentPairRoomId, currentTripId, isAuthenticated]);
 
   const savePlannerToServer = useCallback(async (nextPlannerByDateMine, roomId) => {
     try {
-      const queryString = roomId ? `?roomCode=${encodeURIComponent(roomId)}` : '';
+      const params = new URLSearchParams();
+      if (currentTripId) params.set('tripId', currentTripId);
+      if (roomId) params.set('roomCode', encodeURIComponent(roomId));
+      const queryString = params.toString() ? `?${params.toString()}` : '';
       const response = await fetch(`/api/planner${queryString}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tripId: currentTripId,
+          cityId: currentCityId,
           roomCode: roomId || undefined,
           plannerByDate: compactPlannerByDate(nextPlannerByDateMine)
         })
@@ -496,7 +512,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Planner save failed; retaining local planner cache.', error);
     }
-  }, []);
+  }, [currentTripId, currentCityId]);
 
   useEffect(() => {
     const compactPlannerMine = compactPlannerByDate(plannerByDateMine);
@@ -553,7 +569,10 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       return [];
     }
     try {
-      const payload = await fetchJson('/api/pair');
+      const params = new URLSearchParams();
+      if (currentTripId) params.set('tripId', currentTripId);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const payload = await fetchJson(`/api/pair${qs}`);
       const rooms = Array.isArray(payload?.rooms) ? payload.rooms : [];
       setPairRooms(rooms);
       return rooms;
@@ -561,7 +580,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       console.error('Failed to load pair rooms.', error);
       return [];
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentTripId]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -584,7 +603,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       const payload = await fetchJson('/api/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create' })
+        body: JSON.stringify({ action: 'create', tripId: currentTripId })
       });
       const roomCode = normalizePlannerRoomId(payload?.roomCode);
       if (!roomCode) {
@@ -593,16 +612,16 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       setCurrentPairRoomId(roomCode);
       setPairMemberCount(Number(payload?.memberCount) || 1);
       setPlannerViewMode('merged');
-      await loadPairRooms();
       setStatusMessage(`Created pair room "${roomCode}". Share this code to invite your partner.`);
+      setIsPairActionPending(false);
+      loadPairRooms().catch(() => {});
       return roomCode;
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Failed to create pair room.', true);
-      return '';
-    } finally {
       setIsPairActionPending(false);
+      return '';
     }
-  }, [loadPairRooms, setStatusMessage]);
+  }, [currentTripId, loadPairRooms, setStatusMessage]);
 
   const handleJoinPairRoom = useCallback(async (roomCodeInput) => {
     const roomCode = normalizePlannerRoomId(roomCodeInput);
@@ -616,22 +635,22 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       const payload = await fetchJson('/api/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'join', roomCode })
+        body: JSON.stringify({ action: 'join', roomCode, tripId: currentTripId })
       });
       const joinedRoomCode = normalizePlannerRoomId(payload?.roomCode || roomCode);
       setCurrentPairRoomId(joinedRoomCode);
       setPairMemberCount(Number(payload?.memberCount) || 2);
       setPlannerViewMode('merged');
-      await loadPairRooms();
       setStatusMessage(`Joined pair room "${joinedRoomCode}".`);
+      setIsPairActionPending(false);
+      loadPairRooms().catch(() => {});
       return true;
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Failed to join pair room.', true);
-      return false;
-    } finally {
       setIsPairActionPending(false);
+      return false;
     }
-  }, [loadPairRooms, setStatusMessage]);
+  }, [currentTripId, loadPairRooms, setStatusMessage]);
 
   const handleSelectPairRoom = useCallback((roomCodeInput) => {
     const roomCode = normalizePlannerRoomId(roomCodeInput);
@@ -648,12 +667,15 @@ export default function TripProvider({ children }: { children: ReactNode }) {
 
   const loadSourcesFromServer = useCallback(async () => {
     try {
-      const payload = await fetchJson('/api/sources');
+      const params = new URLSearchParams();
+      if (currentCityId) params.set('cityId', currentCityId);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const payload = await fetchJson(`/api/sources${qs}`);
       setSources(Array.isArray(payload?.sources) ? payload.sources : []);
     } catch (error) {
       console.error('Failed to load sources.', error);
     }
-  }, []);
+  }, [currentCityId]);
 
   const clearMapMarkers = useCallback(() => {
     for (const m of markersRef.current) m.map = null;
@@ -711,9 +733,10 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   }, [mapsReady, crimeHeatmapStrength]);
 
   const refreshCrimeHeatmap = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!currentCityRef.current?.crimeAdapterId) return;
     if (!mapsReady || !mapRef.current || !window.google?.maps?.visualization) return;
     const boundsQuery = buildCrimeBoundsQuery(mapRef.current);
-    const requestPath = `/api/crime?hours=${CRIME_HEATMAP_HOURS}&limit=${CRIME_HEATMAP_LIMIT}${boundsQuery ? `&${boundsQuery}` : ''}`;
+    const requestPath = `/api/crime?city=${currentCityId || DEFAULT_CRIME_CITY_SLUG}&hours=${CRIME_HEATMAP_HOURS}&limit=${CRIME_HEATMAP_LIMIT}${boundsQuery ? `&${boundsQuery}` : ''}`;
     const now = Date.now();
     if (!force) {
       const sameQuery = requestPath === lastCrimeQueryRef.current;
@@ -838,7 +861,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     if (baseLatLngRef.current) { bounds.extend(baseLatLngRef.current); points += 1; }
     for (const e of evts) { if (e._position) { bounds.extend(e._position); points += 1; } }
     for (const p of places) { if (p._position) { bounds.extend(p._position); points += 1; } }
-    if (points === 0) { mapRef.current.setCenter({ lat: 37.7749, lng: -122.4194 }); mapRef.current.setZoom(12); return; }
+    if (points === 0) { mapRef.current.setCenter(currentCity?.mapCenter || DEFAULT_MAP_CENTER); mapRef.current.setZoom(12); return; }
     if (points === 1) { mapRef.current.setCenter(bounds.getCenter()); mapRef.current.setZoom(13); return; }
     mapRef.current.fitBounds(bounds, 60);
   }, []);
@@ -1087,7 +1110,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
             const addActionId = selectedDate ? `add-${createPlanId()}` : '';
             const plannerAction = {
               id: addActionId,
-              label: selectedDate ? `Add to ${formatDateDayMonth(selectedDate)}` : 'Pick planner date first',
+              label: selectedDate ? `Add to ${formatDateDayMonth(selectedDate, timezone)}` : 'Pick planner date first',
               enabled: Boolean(selectedDate)
             };
             infoWindowRef.current.setContent(buildEventInfoWindowHtml(ewp, plannerAction));
@@ -1099,7 +1122,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
                 btn.addEventListener('click', (e) => {
                   e.preventDefault();
                   addEventToDayPlan(ewp);
-                  setStatusMessage(`Added "${ewp.name}" to ${formatDate(selectedDate)}.`);
+                  setStatusMessage(`Added "${ewp.name}" to ${formatDate(selectedDate, timezone)}.`);
                 });
               });
             }
@@ -1183,7 +1206,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
             const addActionId = selectedDate ? `add-${createPlanId()}` : '';
             const plannerAction = {
               id: addActionId,
-              label: selectedDate ? `Add to ${formatDateDayMonth(selectedDate)}` : 'Pick planner date first',
+              label: selectedDate ? `Add to ${formatDateDayMonth(selectedDate, timezone)}` : 'Pick planner date first',
               enabled: Boolean(selectedDate)
             };
             infoWindowRef.current.setContent(buildPlaceInfoWindowHtml(pwp, plannerAction));
@@ -1195,7 +1218,7 @@ export default function TripProvider({ children }: { children: ReactNode }) {
                 btn.addEventListener('click', (e) => {
                   e.preventDefault();
                   addPlaceToDayPlan(pwp);
-                  setStatusMessage(`Added "${pwp.name}" to ${formatDate(selectedDate)}.`);
+                  setStatusMessage(`Added "${pwp.name}" to ${formatDate(selectedDate, timezone)}.`);
                 });
               });
             }
@@ -1229,7 +1252,11 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     async function runBackgroundSync() {
       setIsSyncing(true);
       try {
-        const response = await fetch('/api/sync', { method: 'POST' });
+        const response = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cityId: currentCityId })
+        });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.error || 'Sync failed');
         if (!mounted) return;
@@ -1245,7 +1272,8 @@ export default function TripProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
 
         const errSuffix = ingestionErrors.length > 0 ? ` (${ingestionErrors.length} ingestion errors)` : '';
-        setStatusMessage(`Synced ${syncedEvents.length} events at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles' })}${errSuffix}.`, ingestionErrors.length > 0);
+        setLastSyncAt(Date.now());
+        setStatusMessage(`Synced ${syncedEvents.length} events at ${new Date().toLocaleTimeString('en-US', { timeZone: timezone })}${errSuffix}.`, ingestionErrors.length > 0);
       } catch (error) {
         console.error('Background sync failed; continuing with cached events.', error);
       } finally {
@@ -1256,23 +1284,83 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   async function bootstrap() {
     setIsInitializing(true);
     try {
-      const [config, eventsPayload, sourcesPayload, mePayload] = await Promise.all([
-        fetchJson('/api/config'),
-        fetchJson('/api/events'),
-        fetchJson('/api/sources').catch(() => ({ sources: [] })),
-        fetchJson('/api/me').catch(() => null)
+      // Determine trip/city IDs early so we can fire ALL requests in one wave
+      const urlParamId = (params?.tripId as string) || '';
+      const savedTripId = urlParamId || (typeof window !== 'undefined' ? localStorage.getItem('tripPlanner:activeTripId') || '' : '');
+
+      // Single parallel wave: load everything at once when trip ID is known
+      const hasKnownTrip = !!savedTripId;
+      const [mePayload, citiesPayload, tripsPayload, configPayload, eventsPayload, sourcesPayload] = await Promise.all([
+        fetchJson('/api/me').catch(() => null),
+        fetchJson('/api/cities').catch(() => ({ cities: [] })),
+        fetchJson('/api/trips').catch(() => ({ trips: [] })),
+        hasKnownTrip ? fetchJson(`/api/config?tripId=${savedTripId}`).catch(() => ({})) : Promise.resolve(null),
+        // Events/sources need cityId which we don't know yet if no known trip — these will be fetched after resolution
+        Promise.resolve(null),
+        Promise.resolve(null),
       ]);
       if (!mounted) return;
+
       const nextProfile = mePayload?.profile || null;
       const nextUserId = String(nextProfile?.userId || '');
       setProfile(nextProfile);
       setAuthUserId(nextUserId);
+      const loadedCities = Array.isArray(citiesPayload?.cities) ? citiesPayload.cities : [];
+      const loadedTrips = Array.isArray(tripsPayload?.trips) ? tripsPayload.trips : [];
+      setCities(loadedCities);
+      setTrips(loadedTrips);
+
+      // Resolve active trip and city (URL contains urlId; localStorage has Convex _id)
+      const activeTrip = (urlParamId
+        ? loadedTrips.find((t: any) => t.urlId === urlParamId) || loadedTrips.find((t: any) => t._id === urlParamId)
+        : null)
+        || (savedTripId && !urlParamId
+          ? loadedTrips.find((t: any) => t._id === savedTripId)
+          : null)
+        || loadedTrips[0]
+        || null;
+      const activeTripId = activeTrip?._id || '';
+      const activeTripUrlId = activeTrip?.urlId || '';
+      const activeCityId = activeTrip?.legs?.[0]?.cityId || '';
+      const activeCity = loadedCities.find((c: any) => c.slug === activeCityId) || null;
+      setCurrentTripId(activeTripId);
+      setCurrentTripUrlId(activeTripUrlId);
+      setCurrentCityId(activeCityId);
+      setCurrentCity(activeCity);
+      currentCityRef.current = activeCity;
+      if (activeCity?.timezone) setTimezone(activeCity.timezone);
+      if (activeTripId && typeof window !== 'undefined') {
+        localStorage.setItem('tripPlanner:activeTripId', activeTripId);
+      }
+
+      // Use pre-fetched config or fetch now
+      const config = (hasKnownTrip && configPayload) ? configPayload : await fetchJson(`/api/config${activeTripId ? `?tripId=${activeTripId}` : ''}`);
+      if (!config.mapsBrowserKey) { setStatusMessage('Missing GOOGLE_MAPS_BROWSER_KEY in .env. Map cannot load.', true); return; }
+
+      const eventsQuery = activeCityId ? `?cityId=${activeCityId}` : '';
+
+      // Single parallel wave: Maps script + libraries + events + sources — all at once
+      const mapsReadyPromise = loadGoogleMapsScript(config.mapsBrowserKey).then(() =>
+        Promise.all([
+          window.google.maps.importLibrary('marker'),
+          window.google.maps.importLibrary('visualization'),
+        ])
+      );
+
+      const [eventsData, sourcesData] = await Promise.all([
+        fetchJson(`/api/events${eventsQuery}`),
+        fetchJson(`/api/sources${eventsQuery}`).catch(() => ({ sources: [] })),
+        mapsReadyPromise,
+      ]);
+      if (!mounted) return;
+
       setTripStart(config.tripStart || '');
       setTripEnd(config.tripEnd || '');
       setBaseLocationText(config.baseLocation || '');
-      const loadedEvents = Array.isArray(eventsPayload.events) ? eventsPayload.events : [];
-      const loadedPlaces = Array.isArray(eventsPayload.places) ? eventsPayload.places : [];
-      const loadedSources = Array.isArray(sourcesPayload?.sources) ? sourcesPayload.sources : [];
+      if (config.timezone) setTimezone(config.timezone);
+      const loadedEvents = Array.isArray(eventsData.events) ? eventsData.events : [];
+      const loadedPlaces = Array.isArray(eventsData.places) ? eventsData.places : [];
+      const loadedSources = Array.isArray(sourcesData?.sources) ? sourcesData.sources : [];
       setAllEvents(loadedEvents);
       setAllPlaces(loadedPlaces);
       setSources(loadedSources);
@@ -1282,31 +1370,32 @@ export default function TripProvider({ children }: { children: ReactNode }) {
         void runBackgroundSync();
       }
 
-      if (!config.mapsBrowserKey) { setStatusMessage('Missing GOOGLE_MAPS_BROWSER_KEY in .env. Map cannot load.', true); return; }
-      await loadGoogleMapsScript(config.mapsBrowserKey);
-      await window.google.maps.importLibrary('marker');
-      await window.google.maps.importLibrary('visualization');
+      const mapCenter = activeCity?.mapCenter || DEFAULT_MAP_CENTER;
+
       if (!mounted || !mapElementRef.current || !window.google?.maps) return;
       mapRef.current = new window.google.maps.Map(mapElementRef.current, {
-        center: { lat: 37.7749, lng: -122.4194 }, zoom: 12,
+        center: mapCenter, zoom: 11,
         mapId: config.mapsMapId || 'DEMO_MAP_ID',
         colorScheme: 'DARK',
         mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-        restriction: {
-          latLngBounds: { north: 37.85, south: 37.68, west: -122.55, east: -122.33 },
-          strictBounds: false
-        }
       });
       distanceMatrixRef.current = new window.google.maps.DistanceMatrixService();
       infoWindowRef.current = new window.google.maps.InfoWindow();
-      const geocodedBase = await geocode(config.baseLocation || '');
-      if (geocodedBase) setBaseMarker(geocodedBase, `Base location: ${config.baseLocation}`);
+
+      // Mark map ready immediately — geocode base location in background
       setMapsReady(true);
-      const sampleNote = eventsPayload?.meta?.sampleData ? ' Showing sample data until you sync.' : '';
+      const sampleNote = eventsData?.meta?.sampleData ? ' Showing sample data until you sync.' : '';
       const roleNote = nextProfile?.role === 'owner'
         ? ''
         : ' Signed in as member: sync, trip config, and source management are owner-only.';
       setStatusMessage(`Loaded ${loadedEvents.length} events and ${loadedPlaces.length} curated places.${sampleNote}${roleNote}`);
+
+      // Geocode base location non-blocking — map is already interactive
+      if (config.baseLocation) {
+        geocode(config.baseLocation).then((geocodedBase) => {
+          if (geocodedBase) setBaseMarker(geocodedBase, `Base location: ${config.baseLocation}`);
+        }).catch(() => {});
+      }
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Failed to initialize app.', true);
     } finally {
@@ -1316,6 +1405,22 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     void bootstrap();
     return () => { mounted = false; clearMapMarkers(); clearRoute(); if (baseMarkerRef.current) baseMarkerRef.current.map = null; };
   }, [clearMapMarkers, clearRoute, geocode, loadPairRooms, loadSourcesFromServer, setBaseMarker, setStatusMessage]);
+
+  // Sync tripId from URL params when it changes (e.g. browser back/forward, TripSelector push)
+  const paramTripId = (params?.tripId as string) || '';
+  useEffect(() => {
+    if (!paramTripId || isInitializing) return;
+    // URL uses urlId (UUID); resolve to Convex _id for internal use
+    if (paramTripId !== currentTripUrlId) {
+      const matchedTrip = trips.find((t) => t.urlId === paramTripId) || trips.find((t) => t._id === paramTripId);
+      if (matchedTrip) {
+        const internalId = matchedTrip._id || matchedTrip.id;
+        if (internalId !== currentTripId) {
+          void switchTrip(internalId);
+        }
+      }
+    }
+  }, [paramTripId]);
 
   useEffect(() => {
     if (!mapsReady || !window.google?.maps?.visualization || !mapRef.current) return;
@@ -1425,7 +1530,11 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true);
     setStatusMessage('Syncing latest events...');
     try {
-      const response = await fetch('/api/sync', { method: 'POST' });
+      const response = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cityId: currentCityId })
+      });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || 'Sync failed');
@@ -1435,9 +1544,10 @@ export default function TripProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(payload.places)) setAllPlaces(payload.places);
       const ingestionErrors = Array.isArray(payload?.meta?.ingestionErrors) ? payload.meta.ingestionErrors : [];
       if (ingestionErrors.length > 0) console.error('Sync ingestion errors:', ingestionErrors);
-      await loadSourcesFromServer();
+      loadSourcesFromServer().catch(() => {});
       const errSuffix = ingestionErrors.length > 0 ? ` (${ingestionErrors.length} ingestion errors)` : '';
-      setStatusMessage(`Synced ${syncedEvents.length} events at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles' })}${errSuffix}.`, ingestionErrors.length > 0);
+      setLastSyncAt(Date.now());
+      setStatusMessage(`Synced ${syncedEvents.length} events at ${new Date().toLocaleTimeString('en-US', { timeZone: timezone })}${errSuffix}.`, ingestionErrors.length > 0);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Sync failed', true);
     } finally {
@@ -1461,29 +1571,34 @@ export default function TripProvider({ children }: { children: ReactNode }) {
 
   const handleCreateSource = useCallback(async (event) => {
     event.preventDefault();
-    if (!requireOwnerClient()) {
-      return;
-    }
+    if (!requireOwnerClient()) return;
 
     const url = newSourceUrl.trim();
     const label = newSourceLabel.trim();
     if (!url) { setStatusMessage('Source URL is required.', true); return; }
+
+    // Optimistic: clear form and add placeholder source immediately
+    const optimisticSource = { id: `opt-${Date.now()}`, sourceType: newSourceType, url, label, status: 'active', lastSyncedAt: null, lastError: null };
+    setSources((prev) => [...prev, optimisticSource]);
+    setNewSourceUrl('');
+    setNewSourceLabel('');
     setIsSavingSource(true);
+    setStatusMessage('Added source. Run Sync to ingest data.');
+
     try {
       const response = await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceType: newSourceType, url, label })
+        body: JSON.stringify({ cityId: currentCityId, sourceType: newSourceType, url, label })
       });
-      const payload = await response.json();
       if (!response.ok) {
+        const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || 'Failed to add source.');
       }
-      await loadSourcesFromServer();
-      setNewSourceUrl('');
-      setNewSourceLabel('');
-      setStatusMessage('Added source. Run Sync to ingest data.');
+      loadSourcesFromServer().catch(() => {});
     } catch (error) {
+      // Revert optimistic add
+      setSources((prev) => prev.filter((s) => s.id !== optimisticSource.id));
       setStatusMessage(error instanceof Error ? error.message : 'Failed to add source.', true);
     } finally {
       setIsSavingSource(false);
@@ -1491,62 +1606,65 @@ export default function TripProvider({ children }: { children: ReactNode }) {
   }, [loadSourcesFromServer, newSourceLabel, newSourceType, newSourceUrl, requireOwnerClient, setStatusMessage]);
 
   const handleToggleSourceStatus = useCallback(async (source) => {
-    if (!requireOwnerClient()) {
-      return;
-    }
+    if (!requireOwnerClient()) return;
 
     const nextStatus = source?.status === 'active' ? 'paused' : 'active';
+    // Optimistic: toggle locally
+    setSources((prev) => prev.map((s) => s.id === source.id ? { ...s, status: nextStatus } : s));
+    setStatusMessage(`Source ${nextStatus === 'active' ? 'activated' : 'paused'}.`);
+
     try {
       const response = await fetch(`/api/sources/${encodeURIComponent(source.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus })
       });
-      const payload = await response.json();
       if (!response.ok) {
+        const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || 'Failed to update source.');
       }
-      await loadSourcesFromServer();
-      setStatusMessage(`Source ${nextStatus === 'active' ? 'activated' : 'paused'}.`);
     } catch (error) {
+      // Revert
+      setSources((prev) => prev.map((s) => s.id === source.id ? { ...s, status: source.status } : s));
       setStatusMessage(error instanceof Error ? error.message : 'Failed to update source.', true);
     }
-  }, [loadSourcesFromServer, requireOwnerClient, setStatusMessage]);
+  }, [requireOwnerClient, setStatusMessage]);
 
   const handleDeleteSource = useCallback(async (source) => {
-    if (!requireOwnerClient()) {
-      return;
-    }
+    if (!requireOwnerClient()) return;
+
+    // Optimistic: remove immediately
+    setSources((prev) => prev.filter((s) => s.id !== source.id));
+    setStatusMessage('Source deleted.');
 
     try {
       const response = await fetch(`/api/sources/${encodeURIComponent(source.id)}`, { method: 'DELETE' });
-      const payload = await response.json();
       if (!response.ok) {
+        const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || 'Failed to delete source.');
       }
-      await loadSourcesFromServer();
-      setStatusMessage('Source deleted.');
     } catch (error) {
+      // Revert
+      setSources((prev) => [...prev, source]);
       setStatusMessage(error instanceof Error ? error.message : 'Failed to delete source.', true);
     }
-  }, [loadSourcesFromServer, requireOwnerClient, setStatusMessage]);
+  }, [requireOwnerClient, setStatusMessage]);
 
   const handleSyncSource = useCallback(async (source) => {
-    if (!requireOwnerClient()) {
-      return;
-    }
+    if (!requireOwnerClient()) return;
 
     setSyncingSourceId(source.id);
     setStatusMessage(`Syncing "${source.label || source.url}"...`);
     try {
       const response = await fetch(`/api/sources/${encodeURIComponent(source.id)}`, { method: 'POST' });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(payload?.error || 'Failed to sync source.');
       }
-      await loadSourcesFromServer();
-      const count = payload.events ?? payload.spots ?? 0;
+      const count = payload?.events ?? payload?.spots ?? 0;
+      setLastSyncAt(Date.now());
       setStatusMessage(`Synced ${count} items from "${source.label || source.url}".`);
+      loadSourcesFromServer().catch(() => {});
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Failed to sync source.', true);
     } finally {
@@ -1556,66 +1674,79 @@ export default function TripProvider({ children }: { children: ReactNode }) {
 
   const handleExportPlannerIcs = useCallback(() => {
     if (!selectedDate || dayPlanItems.length === 0) { setStatusMessage('Add planner stops before exporting iCal.', true); return; }
-    const icsContent = buildPlannerIcs(selectedDate, dayPlanItems);
+    const icsContent = buildPlannerIcs(selectedDate, dayPlanItems, { cityName: currentCity?.name || '' });
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = downloadUrl;
-    anchor.download = `sf-trip-${selectedDate}.ics`;
+    anchor.download = `trip-${currentCityId || 'plan'}-${selectedDate}.ics`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     window.URL.revokeObjectURL(downloadUrl);
-    setStatusMessage(`Exported iCal for ${formatDate(selectedDate)}.`);
-  }, [dayPlanItems, selectedDate, setStatusMessage]);
+    setStatusMessage(`Exported iCal for ${formatDate(selectedDate, timezone)}.`);
+  }, [dayPlanItems, selectedDate, setStatusMessage, timezone, currentCity]);
 
   const handleAddDayPlanToGoogleCalendar = useCallback(() => {
     if (!selectedDate || dayPlanItems.length === 0) { setStatusMessage('Add planner stops before opening Google Calendar.', true); return; }
-    const draftUrls = buildGoogleCalendarStopUrls({ dateISO: selectedDate, planItems: dayPlanItems, baseLocationText });
+    const draftUrls = buildGoogleCalendarStopUrls({ dateISO: selectedDate, planItems: dayPlanItems, baseLocationText, timezone });
     let openedCount = 0;
     for (const url of draftUrls) { const w = window.open(url, '_blank', 'noopener,noreferrer'); if (w) openedCount += 1; }
     if (openedCount === 0) { setStatusMessage('Google Calendar pop-up blocked. Allow pop-ups and try again.', true); return; }
     if (openedCount < draftUrls.length) { setStatusMessage(`Opened ${openedCount}/${draftUrls.length} Google drafts. Your browser blocked some pop-ups.`, true); return; }
-    setStatusMessage(`Opened ${openedCount} Google Calendar drafts for ${formatDate(toDateOnlyISO(selectedDate))}.`);
-  }, [baseLocationText, dayPlanItems, selectedDate, setStatusMessage]);
+    setStatusMessage(`Opened ${openedCount} Google Calendar drafts for ${formatDate(toDateOnlyISO(selectedDate), timezone)}.`);
+  }, [baseLocationText, dayPlanItems, selectedDate, setStatusMessage, timezone]);
 
   const handleSaveTripDates = useCallback(async (start, end) => {
     if (!requireOwnerClient()) {
       throw new Error('Owner role is required.');
     }
 
+    // Optimistic: update immediately
+    const prevStart = tripStart;
+    const prevEnd = tripEnd;
+    setTripStart(start);
+    setTripEnd(end);
+
     try {
       await fetchJson('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tripStart: start, tripEnd: end }),
+        body: JSON.stringify({ tripId: currentTripId, tripStart: start, tripEnd: end }),
       });
-      setTripStart(start);
-      setTripEnd(end);
     } catch (err) {
+      // Revert
+      setTripStart(prevStart);
+      setTripEnd(prevEnd);
       const message = err instanceof Error ? err.message : 'Unknown error';
       setStatusMessage(`Failed to save trip dates: ${message}`, true);
       throw err;
     }
-  }, [requireOwnerClient, setStatusMessage]);
+  }, [tripStart, tripEnd, requireOwnerClient, setStatusMessage]);
 
   const handleSaveBaseLocation = useCallback(async (text) => {
     if (!requireOwnerClient()) {
       throw new Error('Owner role is required.');
     }
 
-    await fetchJson('/api/config', {
+    // Optimistic: update text and map marker immediately
+    setBaseLocationText(text);
+    setBaseLocationVersion((v) => v + 1);
+
+    // Geocode and persist in parallel
+    if (mapsReady && window.google?.maps) {
+      geocode(text).then((geocodedBase) => {
+        if (geocodedBase) setBaseMarker(geocodedBase, `Base location: ${text}`);
+      }).catch(() => {});
+    }
+    fetchJson('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tripStart, tripEnd, baseLocation: text }),
+      body: JSON.stringify({ tripId: currentTripId, tripStart, tripEnd, baseLocation: text }),
+    }).catch((err) => {
+      setStatusMessage(err instanceof Error ? err.message : 'Failed to save base location.', true);
     });
-    setBaseLocationText(text);
-    if (mapsReady && window.google?.maps) {
-      const geocodedBase = await geocode(text);
-      if (geocodedBase) setBaseMarker(geocodedBase, `Base location: ${text}`);
-    }
-    setBaseLocationVersion((v) => v + 1);
-  }, [tripStart, tripEnd, mapsReady, geocode, requireOwnerClient, setBaseMarker]);
+  }, [tripStart, tripEnd, mapsReady, geocode, requireOwnerClient, setBaseMarker, setStatusMessage]);
 
   const toggleCategory = useCallback((category) => {
     setHiddenCategories((prev) => {
@@ -1631,6 +1762,128 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     setCalendarMonthISO(shifted);
   }, [calendarAnchorISO]);
 
+  const switchTrip = useCallback((tripId: string) => {
+    if (!tripId || tripId === currentTripId) return;
+    setCurrentTripId(tripId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tripPlanner:activeTripId', tripId);
+    }
+
+    const trip = trips.find((t) => t._id === tripId || t.id === tripId);
+    if (trip?.urlId) setCurrentTripUrlId(trip.urlId);
+    if (trip?.legs?.length > 0) {
+      const firstLeg = trip.legs[0];
+      const legCityId = firstLeg.cityId || '';
+      setCurrentCityId(legCityId);
+      const city = cities.find((c) => c.slug === legCityId);
+      if (city) {
+        setCurrentCity(city);
+        currentCityRef.current = city;
+        setTimezone(city.timezone || 'UTC');
+        if (mapRef.current && city.mapCenter) {
+          mapRef.current.setCenter(city.mapCenter);
+          mapRef.current.setZoom(12);
+        }
+        if (!city.crimeAdapterId && crimeHeatmapRef.current) {
+          crimeHeatmapRef.current.setMap(null);
+          crimeHeatmapRef.current = null;
+        }
+      }
+    }
+
+    // Load config in background — UI already updated
+    fetchJson(`/api/config?tripId=${encodeURIComponent(tripId)}`).then((configPayload) => {
+      if (configPayload) {
+        setTripStart(configPayload.tripStart || '');
+        setTripEnd(configPayload.tripEnd || '');
+        setBaseLocationText(configPayload.baseLocation || '');
+        if (configPayload.timezone) setTimezone(configPayload.timezone);
+      }
+    }).catch(() => {});
+  }, [currentTripId, trips, cities]);
+
+  const switchCityLeg = useCallback((cityId: string) => {
+    if (!cityId || cityId === currentCityId) return;
+    setCurrentCityId(cityId);
+
+    const city = cities.find((c) => c.slug === cityId);
+    if (city) {
+      setCurrentCity(city);
+      currentCityRef.current = city;
+      setTimezone(city.timezone || 'UTC');
+      if (mapRef.current && city.mapCenter) {
+        mapRef.current.setCenter(city.mapCenter);
+        mapRef.current.setZoom(12);
+      }
+      if (!city.crimeAdapterId && crimeHeatmapRef.current) {
+        crimeHeatmapRef.current.setMap(null);
+        crimeHeatmapRef.current = null;
+      }
+    }
+
+    // Load events/sources in background — UI already updated
+    Promise.all([
+      fetchJson(`/api/events?cityId=${encodeURIComponent(cityId)}`),
+      loadSourcesFromServer(),
+    ]).then(([eventsPayload]) => {
+      if (eventsPayload) {
+        setAllEvents(Array.isArray(eventsPayload.events) ? eventsPayload.events : []);
+        if (Array.isArray(eventsPayload.places)) setAllPlaces(eventsPayload.places);
+      }
+    }).catch(() => {});
+  }, [currentCityId, cities, loadSourcesFromServer]);
+
+  const handleUpdateTripLegs = useCallback(async (legs: { cityId: string; startDate: string; endDate: string }[]) => {
+    if (!currentTripId || !requireOwnerClient()) {
+      throw new Error('Owner role is required.');
+    }
+
+    const res = await fetchJson(`/api/trips/${encodeURIComponent(currentTripId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legs }),
+    });
+
+    // Update local trips state
+    setTrips((prev) =>
+      prev.map((t) => ((t._id || t.id) === currentTripId ? { ...t, legs } : t))
+    );
+
+    // Sync tripConfig dates to match the new overall range
+    const overallStart = legs[0]?.startDate || '';
+    const overallEnd = legs[legs.length - 1]?.endDate || '';
+    if (overallStart && overallEnd) {
+      setTripStart(overallStart);
+      setTripEnd(overallEnd);
+      fetchJson('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripId: currentTripId, tripStart: overallStart, tripEnd: overallEnd }),
+      }).catch(() => {});
+    }
+
+    return res;
+  }, [currentTripId, requireOwnerClient, setStatusMessage]);
+
+  const handleDeleteTrip = useCallback(() => {
+    if (!currentTripId) return;
+    const tripIdToDelete = currentTripId;
+    const remaining = trips.filter((t) => (t._id || t.id) !== tripIdToDelete);
+
+    // Navigate immediately — don't wait for the server
+    if (remaining.length > 0) {
+      const next = remaining[0];
+      localStorage.setItem('tripPlanner:activeTripId', next._id || next.id);
+    } else {
+      localStorage.removeItem('tripPlanner:activeTripId');
+    }
+    const nextUrlId = remaining.length > 0 ? (remaining[0].urlId || remaining[0]._id || remaining[0].id) : '';
+    window.location.href = nextUrlId ? `/trips/${nextUrlId}/map` : '/dashboard';
+
+    // Fire-and-forget deletion in the background
+    fetch(`/api/trips/${encodeURIComponent(tripIdToDelete)}`, { method: 'DELETE' }).catch(() => {});
+  }, [currentTripId, trips]);
+
   const travelReadyCount = visibleEvents.filter(
     (e) => e.travelDurationText && e.travelDurationText !== 'Unavailable'
   ).length;
@@ -1640,7 +1893,8 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     mapPanelRef, sidebarRef, mapElementRef, mapRef,
     // State
     authLoading, isAuthenticated, authUserId, profile, canManageGlobal,
-    status, statusError, mapsReady, isInitializing,
+    status, statusError, lastSyncAt, mapsReady, isInitializing,
+    currentTripId, currentTripUrlId, currentCityId, trips, cities, currentCity, timezone,
     crimeLayerMeta,
     crimeHeatmapStrength, setCrimeHeatmapStrength,
     allEvents, allPlaces, visibleEvents, visiblePlaces,
@@ -1668,11 +1922,13 @@ export default function TripProvider({ children }: { children: ReactNode }) {
     handleUsePersonalPlanner, handleCreatePairRoom, handleJoinPairRoom, handleSelectPairRoom,
     handleSync, handleDeviceLocation,
     handleCreateSource, handleToggleSourceStatus, handleDeleteSource, handleSyncSource,
-    handleSaveTripDates, handleSaveBaseLocation,
+    handleSaveTripDates, handleSaveBaseLocation, handleUpdateTripLegs,
     handleExportPlannerIcs, handleAddDayPlanToGoogleCalendar,
     addEventToDayPlan, addPlaceToDayPlan, removePlanItem, clearDayPlan, startPlanDrag,
     shiftCalendarMonth,
-    renderCurrentSelection
+    renderCurrentSelection,
+    switchTrip, switchCityLeg,
+    handleDeleteTrip,
   };
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;

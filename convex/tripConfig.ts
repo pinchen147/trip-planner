@@ -2,8 +2,9 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { requireAuthenticatedUserId, requireOwnerUserId } from './authz';
 
-const TRIP_CONFIG_KEY = 'default';
 const tripConfigValidator = v.object({
+  tripId: v.id('trips'),
+  timezone: v.string(),
   tripStart: v.string(),
   tripEnd: v.string(),
   baseLocation: v.string(),
@@ -15,20 +16,24 @@ const saveTripConfigResultValidator = v.object({
 });
 
 export const getTripConfig = query({
-  args: {},
+  args: {
+    tripId: v.id('trips')
+  },
   returns: tripConfigValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAuthenticatedUserId(ctx);
     const row = await ctx.db
       .query('tripConfig')
-      .withIndex('by_key', (q) => q.eq('key', TRIP_CONFIG_KEY))
+      .withIndex('by_trip', (q) => q.eq('tripId', args.tripId))
       .first();
 
     if (!row) {
-      return { tripStart: '', tripEnd: '', baseLocation: '', updatedAt: null };
+      return { tripId: args.tripId, timezone: 'UTC', tripStart: '', tripEnd: '', baseLocation: '', updatedAt: null };
     }
 
     return {
+      tripId: row.tripId,
+      timezone: row.timezone,
       tripStart: row.tripStart,
       tripEnd: row.tripEnd,
       baseLocation: row.baseLocation ?? '',
@@ -39,6 +44,8 @@ export const getTripConfig = query({
 
 export const saveTripConfig = mutation({
   args: {
+    tripId: v.id('trips'),
+    timezone: v.optional(v.string()),
     tripStart: v.string(),
     tripEnd: v.string(),
     baseLocation: v.optional(v.string()),
@@ -50,19 +57,21 @@ export const saveTripConfig = mutation({
 
     const existing = await ctx.db
       .query('tripConfig')
-      .withIndex('by_key', (q) => q.eq('key', TRIP_CONFIG_KEY))
+      .withIndex('by_trip', (q) => q.eq('tripId', args.tripId))
       .first();
     const shouldUpdateBaseLocation = args.baseLocation !== undefined;
     const nextBaseLocation = shouldUpdateBaseLocation ? args.baseLocation : existing?.baseLocation;
 
     const nextValue: {
-      key: string;
+      tripId: typeof args.tripId;
+      timezone: string;
       tripStart: string;
       tripEnd: string;
       updatedAt: string;
       baseLocation?: string;
     } = {
-      key: TRIP_CONFIG_KEY,
+      tripId: args.tripId,
+      timezone: args.timezone ?? existing?.timezone ?? 'UTC',
       tripStart: args.tripStart,
       tripEnd: args.tripEnd,
       updatedAt: args.updatedAt
@@ -74,6 +83,7 @@ export const saveTripConfig = mutation({
     if (existing) {
       const shouldPatch = existing.tripStart !== args.tripStart ||
         existing.tripEnd !== args.tripEnd ||
+        (args.timezone !== undefined && existing.timezone !== args.timezone) ||
         (shouldUpdateBaseLocation && existing.baseLocation !== nextBaseLocation);
       if (shouldPatch) {
         await ctx.db.patch(existing._id, nextValue);

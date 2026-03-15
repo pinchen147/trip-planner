@@ -5,11 +5,19 @@ export const runtime = 'nodejs';
 
 let syncInFlight = null;
 
-export async function POST() {
+export async function POST(request) {
   return runWithOwnerClient(async () => {
     try {
+      let cityId = '';
+      try {
+        const body = await request.json();
+        cityId = typeof body.cityId === 'string' ? body.cityId.trim() : '';
+      } catch {
+        // no body is OK, cityId stays empty
+      }
+
       if (!syncInFlight) {
-        syncInFlight = syncEvents().finally(() => {
+        syncInFlight = syncEvents(cityId).finally(() => {
           syncInFlight = null;
         });
       }

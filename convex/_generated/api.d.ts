@@ -11,14 +11,17 @@
 import type * as appUsers from "../appUsers.js";
 import type * as auth from "../auth.js";
 import type * as authz from "../authz.js";
+import type * as cities from "../cities.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
 import type * as ownerRole from "../ownerRole.js";
 import type * as planner from "../planner.js";
 import type * as routeCache from "../routeCache.js";
+import type * as seed from "../seed.js";
 import type * as sources from "../sources.js";
 import type * as spots from "../spots.js";
 import type * as tripConfig from "../tripConfig.js";
+import type * as trips from "../trips.js";
 
 import type {
   ApiFromModules,
@@ -30,14 +33,17 @@ declare const fullApi: ApiFromModules<{
   appUsers: typeof appUsers;
   auth: typeof auth;
   authz: typeof authz;
+  cities: typeof cities;
   events: typeof events;
   http: typeof http;
   ownerRole: typeof ownerRole;
   planner: typeof planner;
   routeCache: typeof routeCache;
+  seed: typeof seed;
   sources: typeof sources;
   spots: typeof spots;
   tripConfig: typeof tripConfig;
+  trips: typeof trips;
 }>;
 
 /**
