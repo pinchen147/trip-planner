@@ -53,6 +53,21 @@ const SAFETY_SOURCES = [
     url: 'https://data.cityofchicago.org/d/ijzp-q8t2',
     desc: 'Chicago police department crime reports',
   },
+  {
+    name: 'Seattle Open Data — SPD Offenses',
+    url: 'https://data.seattle.gov/d/tazs-3rd5',
+    desc: 'Seattle police department offense reports',
+  },
+  {
+    name: 'Cincinnati Open Data — CPD Incidents',
+    url: 'https://data.cincinnati-oh.gov/d/k59e-2pvf',
+    desc: 'Cincinnati police department incident data',
+  },
+  {
+    name: 'Dallas Open Data — DPD Incidents',
+    url: 'https://www.dallasopendata.com/d/qv6i-rri7',
+    desc: 'Dallas police department incident reports',
+  },
 ];
 
 const TECH_STACK = [
@@ -410,7 +425,7 @@ export default function LandingContent() {
                     </p>
                     <p className="mt-3 text-[13px] leading-relaxed text-foreground-secondary">
                       The crime heatmap pulls from publicly available city safety data
-                      across SF, NYC, LA, and Chicago, so you can overlay real incident reports directly on top of your trip plan.
+                      across 7+ US cities, so you can overlay real incident reports directly on top of your trip plan.
                     </p>
                     <div className="mt-5 space-y-3">
                       {SAFETY_SOURCES.map((source) => (
@@ -446,8 +461,8 @@ export default function LandingContent() {
                     Know Where to Walk&mdash;and Where Not To
                   </h2>
                   <p className="mt-4 text-[13px] leading-relaxed text-foreground-secondary">
-                    Every major city has areas that see more street crime than
-                    others. Times Square at 2 AM is different from the Upper West Side at noon.
+                    Every city has areas that see more street crime than
+                    others. A busy downtown at 2 AM is different from a residential neighborhood at noon.
                   </p>
                   <p className="mt-3 text-[13px] leading-relaxed text-foreground-secondary">
                     Trip Planner overlays a live crime heatmap directly on top of your events
@@ -675,9 +690,12 @@ export default function LandingContent() {
               </div>
             </FadeItem>
             <FadeItem>
-              <p className="text-[11px] text-muted">
-                Plan trips to any city. Open source.
-              </p>
+              <div className="flex items-center gap-4 text-[11px] text-muted">
+                <span>Plan trips to any city. Open source.</span>
+                <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground-secondary">
+                  Privacy
+                </Link>
+              </div>
             </FadeItem>
           </InViewStagger>
         </footer>

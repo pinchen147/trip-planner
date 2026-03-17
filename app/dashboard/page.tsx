@@ -297,7 +297,7 @@ export default function DashboardPage() {
                           className="truncate"
                           style={{
                             fontFamily: mono, fontSize: 13,
-                            color: leg.city ? '#F5F5F5' : '#525252',
+                            color: '#F5F5F5',
                             fontWeight: leg.city ? 500 : 400,
                           }}
                         >

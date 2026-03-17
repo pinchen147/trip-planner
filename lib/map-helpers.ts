@@ -166,18 +166,51 @@ export async function requestPlannedRoute({ origin, destination, waypoints, trav
   };
 }
 
-export function loadGoogleMapsScript(apiKey) {
-  if (window.google?.maps) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const callbackName = `initGoogleMaps_${Math.random().toString(36).slice(2)}`;
-    window[callbackName] = () => { delete window[callbackName]; resolve(); };
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,visualization&loading=async&callback=${callbackName}`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => { delete window[callbackName]; reject(new Error('Failed to load Google Maps script.')); };
-    document.head.appendChild(script);
+const GMAPS_LOAD_TIMEOUT_MS = 15_000;
+const GMAPS_POLL_INTERVAL_MS = 100;
+const GMAPS_CALLBACK = '__gmapsReady';
+const GMAPS_PROMISE_KEY = '__gmapsLoadPromise';
+
+function waitForGoogleMaps(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + GMAPS_LOAD_TIMEOUT_MS;
+    const poll = () => {
+      if (window.google?.maps) return resolve();
+      if (Date.now() > deadline) return reject(new Error('Google Maps script load timed out.'));
+      setTimeout(poll, GMAPS_POLL_INTERVAL_MS);
+    };
+    poll();
   });
+}
+
+export function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  if (window.google?.maps) return Promise.resolve();
+
+  const w = window as any;
+  if (w[GMAPS_PROMISE_KEY]) return w[GMAPS_PROMISE_KEY];
+
+  // Script tag exists from HMR or prior render — wait for it, don't inject another
+  if (document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
+    w[GMAPS_PROMISE_KEY] = waitForGoogleMaps();
+    return w[GMAPS_PROMISE_KEY];
+  }
+
+  w[GMAPS_PROMISE_KEY] = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const succeed = () => { if (!settled) { settled = true; delete w[GMAPS_CALLBACK]; resolve(); } };
+    const fail = (msg: string) => {
+      if (!settled) { settled = true; delete w[GMAPS_CALLBACK]; delete w[GMAPS_PROMISE_KEY]; reject(new Error(msg)); }
+    };
+
+    w[GMAPS_CALLBACK] = succeed;
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,visualization&callback=${GMAPS_CALLBACK}`;
+    script.async = true;
+    script.onerror = () => fail('Google Maps script failed to load.');
+    document.head.appendChild(script);
+    setTimeout(() => fail('Google Maps script load timed out.'), GMAPS_LOAD_TIMEOUT_MS);
+  });
+  return w[GMAPS_PROMISE_KEY];
 }
 
 export function buildInfoWindowAddButton(plannerAction) {

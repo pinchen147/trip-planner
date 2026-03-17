@@ -40,18 +40,18 @@ function computeOverlapColumns(items: any[]) {
   return { columns, totalCols };
 }
 
-function formatDateLarge(dateISO: string, _tz: string): string {
+function formatDateLarge(dateISO: string, tz: string): string {
   if (!dateISO) return '';
-  const [y, m, d] = dateISO.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  const date = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateISO;
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric', timeZone: tz || 'UTC' });
 }
 
-function formatWeekday(dateISO: string): string {
+function formatWeekday(dateISO: string, tz?: string): string {
   if (!dateISO) return '';
-  const [y, m, d] = dateISO.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString('en-US', { weekday: 'long' });
+  const date = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateISO;
+  return date.toLocaleDateString('en-US', { weekday: 'long', timeZone: tz || 'UTC' });
 }
 
 function isTodayISO(dateISO: string): boolean {
@@ -83,12 +83,12 @@ export default function DayPlanCalendar() {
   }, []);
 
   // Auto-scroll to 8 AM or first item on mount / date change
+  const firstItemStart = dayPlanItems[0]?.startMinutes;
   useEffect(() => {
     if (!scrollRef.current) return;
-    const firstItem = dayPlanItems[0];
-    const scrollToMinute = firstItem ? Math.max(0, firstItem.startMinutes - 60) : 8 * 60;
+    const scrollToMinute = firstItemStart != null ? Math.max(0, firstItemStart - 60) : 8 * 60;
     scrollRef.current.scrollTop = scrollToMinute * PLAN_MINUTE_HEIGHT;
-  }, [selectedDate, dayPlanItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedDate, firstItemStart]);
 
   // Focus input when editing
   useEffect(() => {
@@ -201,7 +201,7 @@ export default function DayPlanCalendar() {
             {formatDateLarge(selectedDate, timezone)}
           </h2>
           <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 500, color: '#00E87B' }}>
-            {formatWeekday(selectedDate)}
+            {formatWeekday(selectedDate, timezone)}
             {currentCity?.name ? ` · ${currentCity.name}` : ''}
           </span>
         </div>

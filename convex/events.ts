@@ -195,6 +195,7 @@ export const upsertEvents = mutation({
 
     for (const row of existingRows) {
       if (!keepUrls.has(row.eventUrl)) {
+        if (row.sourceId === 'ai-parse') continue;
         const nextMissedSyncCount = (Number(row.missedSyncCount) || 0) + 1;
         const isDeleted = nextMissedSyncCount >= missedSyncThreshold;
 

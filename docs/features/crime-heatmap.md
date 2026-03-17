@@ -1,6 +1,8 @@
 # Crime Heatmap: Technical Architecture & Implementation
 
-> Document Basis: current code at time of generation (2026-03-15).
+> Document Basis: current code at time of generation.
+>
+> **Last Updated:** 2026-03-16
 
 ---
 

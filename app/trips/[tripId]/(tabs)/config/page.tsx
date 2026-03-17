@@ -1,17 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Check, Copy, Trash2, X } from 'lucide-react';
+import { Check, Copy, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from '@/components/ui/select';
 import { useTrip } from '@/components/providers/TripProvider';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { safeHostname } from '@/lib/helpers';
 
 function normalizePlannerRoomId(value) {
   const nextValue = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -27,12 +23,8 @@ export default function ConfigPage() {
     currentTripId, trips, cities, handleDeleteTrip, handleUpdateTripLegs,
     currentPairRoomId, pairRooms, pairMemberCount,
     isPairActionPending, handleUsePersonalPlanner, handleCreatePairRoom, handleJoinPairRoom, handleSelectPairRoom,
-    groupedSources,
-    newSourceType, setNewSourceType, newSourceUrl, setNewSourceUrl,
-    isSavingSource, syncingSourceId,
-    handleCreateSource, handleToggleSourceStatus, handleDeleteSource, handleSyncSource,
     tripStart, tripEnd, handleSaveTripDates,
-    setStatusMessage, timezone
+    setStatusMessage
   } = useTrip();
 
   const [roomCodeInput, setRoomCodeInput] = useState(currentPairRoomId);
@@ -186,49 +178,6 @@ export default function ConfigPage() {
       const stays = (leg.stays || []).filter((_, si) => si !== stayIndex);
       return { ...leg, stays };
     }));
-  };
-
-  const renderSourceCard = (source) => {
-    const isEvent = source.sourceType === 'event';
-    const isActive = source.status === 'active';
-    const isSyncingThis = syncingSourceId === source.id;
-    const displayTitle = source.label || safeHostname(source.url);
-    const isReadonly = Boolean(source.readonly) || !canManageGlobal;
-
-    return (
-      <Card
-        className={`p-3 transition-all duration-150 hover:border-border-hover hover:shadow-[0_1px_4px_rgba(12,18,34,0.05)] ${source.status === 'paused' ? 'opacity-60' : ''}`}
-        style={{ borderLeft: `3px solid ${isEvent ? 'rgba(255,136,0,0.4)' : 'rgba(0,255,136,0.3)'}` }}
-        key={source.id || `${source.sourceType}-${source.url}`}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h4 className="m-0 text-[0.86rem] font-bold text-foreground leading-snug">{displayTitle}</h4>
-            <a className="block mt-0.5 text-muted text-[0.72rem] no-underline truncate hover:text-accent hover:underline" href={source.url} target="_blank" rel="noreferrer" title={source.url}>{source.url}</a>
-          </div>
-          <Badge variant={isActive ? 'default' : 'warning'} className="shrink-0 gap-1 capitalize">
-            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-accent shadow-[0_0_4px_rgba(0,255,136,0.5)]' : 'bg-warning'}`} />
-            {source.status}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-1.5 mt-1.5 text-muted text-[0.7rem]">
-          <span>{source.lastSyncedAt ? `Synced ${new Date(source.lastSyncedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone })}` : 'Never synced'}</span>
-          {source.lastError ? <span className="text-[#FF4444]">· {source.lastError}</span> : null}
-          {source.readonly ? <span className="italic">· Read-only</span> : null}
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          <Button type="button" size="sm" variant="default" className="text-[0.7rem] min-h-[26px] px-2 py-0.5" disabled={isSyncingThis || isReadonly} onClick={() => { void handleSyncSource(source); }}>
-            {isSyncingThis ? <><RefreshCw size={10} className="animate-spin" />Syncing...</> : 'Sync'}
-          </Button>
-          <Button type="button" size="sm" variant="secondary" className="text-[0.7rem] min-h-[26px] px-2 py-0.5" disabled={isReadonly} onClick={() => { void handleToggleSourceStatus(source); }}>
-            {isActive ? 'Pause' : 'Resume'}
-          </Button>
-          <Button type="button" size="sm" variant="danger" className="text-[0.7rem] min-h-[26px] px-2 py-0.5" disabled={isReadonly} onClick={() => { void handleDeleteSource(source); }}>
-            Remove
-          </Button>
-        </div>
-      </Card>
-    );
   };
 
   const sectionHeaderStyle = {
@@ -598,30 +547,6 @@ export default function ConfigPage() {
             </Card>
           </div>
 
-          {/* Event Sources */}
-          <div className="flex flex-col gap-3">
-            <span style={sectionHeaderStyle}>EVENT SOURCES</span>
-            {groupedSources.event.map((source) => renderSourceCard(source))}
-            {groupedSources.spot.map((source) => renderSourceCard(source))}
-            {groupedSources.event.length === 0 && groupedSources.spot.length === 0 && (
-              <p className="border border-dashed border-border rounded-none p-5 text-center text-muted text-[0.82rem] bg-bg-subtle">No sources yet.</p>
-            )}
-            <form className="flex items-center gap-2 max-sm:flex-col" onSubmit={handleCreateSource}>
-              <Select value={newSourceType} onValueChange={setNewSourceType}>
-                <SelectTrigger className="min-h-[36px] w-[120px] shrink-0">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="event">Event</SelectItem>
-                  <SelectItem value="spot">Spot</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input placeholder="https://example.com/source" value={newSourceUrl} onChange={(event) => setNewSourceUrl(event.target.value)} />
-              <Button type="submit" size="sm" className="min-h-[36px] shrink-0" disabled={!canManageGlobal || isSavingSource}>
-                {isSavingSource ? 'Adding...' : 'Add'}
-              </Button>
-            </form>
-          </div>
         </div>
       </div>
     </section>

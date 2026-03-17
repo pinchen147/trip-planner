@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:backend": "node --test lib/events.test.mjs lib/events.planner.test.mjs lib/events-api.test.mjs lib/pair-api.test.mjs lib/planner-api.test.mjs lib/security.test.mjs convex/authz.test.mjs convex/owner-role.test.mjs lib/next-config-security.test.mjs lib/layout-security.test.mjs lib/trip-provider-storage.test.mjs lib/api-guards.test.mjs lib/crime-cities.test.mjs lib/dashboard.test.mjs lib/trip-provider-bootstrap.test.mjs lib/firecrawl-spots.test.mjs lib/spots-discovery.test.mjs",
+    "test:backend": "node --test lib/events.test.mjs lib/events.planner.test.mjs lib/events-api.test.mjs lib/pair-api.test.mjs lib/planner-api.test.mjs lib/security.test.mjs convex/authz.test.mjs convex/owner-role.test.mjs lib/next-config-security.test.mjs lib/layout-security.test.mjs lib/trip-provider-storage.test.mjs lib/api-guards.test.mjs lib/crime-cities.test.mjs lib/dashboard.test.mjs lib/trip-provider-bootstrap.test.mjs lib/firecrawl-spots.test.mjs lib/spots-discovery.test.mjs lib/helpers.test.mjs lib/planner-helpers.test.mjs lib/integrity.test.mjs",
     "lint": "node node_modules/eslint/bin/eslint.js .",
     "lint:fix": "node node_modules/eslint/bin/eslint.js . --fix",
     "typecheck": "tsc --noEmit",
@@ -20,6 +20,7 @@
     "convex:deploy": "convex deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "@auth/core": "0.37.0",
     "@convex-dev/auth": "^0.0.90",
     "@radix-ui/react-select": "^2.2.6",

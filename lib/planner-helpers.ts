@@ -1,4 +1,4 @@
-import type { PlanItem, PlanItemKind, MinuteRange } from './types';
+import type { PlanItem, PlanItemKind, MinuteRange } from './types.ts';
 import {
   MINUTES_IN_DAY,
   MIN_PLAN_BLOCK_MINUTES,
@@ -9,7 +9,7 @@ import {
   formatMinuteLabel,
   formatDate,
   toDateOnlyISO
-} from './helpers';
+} from './helpers.ts';
 
 export const PLAN_SNAP_MINUTES = 15;
 export const PLAN_HOUR_HEIGHT = 50;
@@ -135,7 +135,7 @@ function escapeIcsText(value: string): string {
 function toCalendarDateTime(dateISO: string, minutesFromMidnight: number): string {
   const normalizedDateISO = toDateOnlyISO(dateISO);
   const [year, month, day] = normalizedDateISO.split('-').map((part) => Number(part));
-  const clampedMinutes = clampMinutes(minutesFromMidnight, 0, MINUTES_IN_DAY);
+  const clampedMinutes = clampMinutes(minutesFromMidnight, 0, MINUTES_IN_DAY - 1);
   const hours = Math.floor(clampedMinutes / 60);
   const minutes = clampedMinutes % 60;
   return [
@@ -149,13 +149,14 @@ function toIcsUtcTimestamp(dateInput: Date): string {
   return new Date(dateInput).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-export function buildPlannerIcs(dateISO: string, planItems: PlanItem[], { cityName = '' } = {}): string {
+export function buildPlannerIcs(dateISO: string, planItems: PlanItem[], { cityName = '', timezone = 'UTC' } = {}): string {
   const dateOnlyISO = toDateOnlyISO(dateISO);
   const sortedItems = sortPlanItems(planItems);
   const timestamp = toIcsUtcTimestamp(new Date());
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Trip Planner//EN',
-    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-TIMEZONE:${timezone}`
   ];
   for (const item of sortedItems) {
     const startValue = toCalendarDateTime(dateOnlyISO, item.startMinutes);
@@ -164,10 +165,15 @@ export function buildPlannerIcs(dateISO: string, planItems: PlanItem[], { cityNa
       `Type: ${item.kind === 'event' ? 'Event' : 'Place'}`,
       item.link ? `Link: ${item.link}` : ''
     ].filter(Boolean);
+    const isUtc = timezone === 'UTC';
+    const dtStart = isUtc ? `DTSTART:${startValue}Z` : `DTSTART;TZID=${timezone}:${startValue}`;
+    const dtEnd = isUtc ? `DTEND:${endValue}Z` : `DTEND;TZID=${timezone}:${endValue}`;
     lines.push(
       'BEGIN:VEVENT',
       `UID:${escapeIcsText(`${item.id}-${dateOnlyISO}@trip-planner.local`)}`,
-      `DTSTAMP:${timestamp}`, `DTSTART:${startValue}`, `DTEND:${endValue}`,
+      `DTSTAMP:${timestamp}`,
+      dtStart,
+      dtEnd,
       `SUMMARY:${escapeIcsText(item.title || 'Trip stop')}`,
       `LOCATION:${escapeIcsText(item.locationText || cityName || '')}`,
       `DESCRIPTION:${escapeIcsText(descriptionParts.join('\n'))}`,
@@ -178,7 +184,7 @@ export function buildPlannerIcs(dateISO: string, planItems: PlanItem[], { cityNa
   return `${lines.join('\r\n')}\r\n`;
 }
 
-export function buildGoogleCalendarItemUrl({ dateISO, item, baseLocationText, timezone = 'America/Los_Angeles' }: {
+export function buildGoogleCalendarItemUrl({ dateISO, item, baseLocationText, timezone = 'UTC' }: {
   dateISO: string;
   item: PlanItem;
   baseLocationText: string;
@@ -204,7 +210,7 @@ export function buildGoogleCalendarItemUrl({ dateISO, item, baseLocationText, ti
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-export function buildGoogleCalendarStopUrls({ dateISO, planItems, baseLocationText, timezone = 'America/Los_Angeles' }: {
+export function buildGoogleCalendarStopUrls({ dateISO, planItems, baseLocationText, timezone = 'UTC' }: {
   dateISO: string;
   planItems: PlanItem[];
   baseLocationText: string;

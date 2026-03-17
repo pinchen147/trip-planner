@@ -54,6 +54,33 @@ const CITIES: Record<string, CityEntry> = {
     mapBounds: { north: 51.69, south: 51.28, east: 0.34, west: -0.51 },
     crimeAdapterId: 'uk-police',
   },
+  'seattle': {
+    slug: 'seattle',
+    name: 'Seattle',
+    timezone: 'America/Los_Angeles',
+    locale: 'en-US',
+    mapCenter: { lat: 47.6062, lng: -122.3321 },
+    mapBounds: { north: 47.73, south: 47.49, east: -122.22, west: -122.44 },
+    crimeAdapterId: 'seattle-open-data',
+  },
+  'cincinnati': {
+    slug: 'cincinnati',
+    name: 'Cincinnati',
+    timezone: 'America/New_York',
+    locale: 'en-US',
+    mapCenter: { lat: 39.1031, lng: -84.512 },
+    mapBounds: { north: 39.21, south: 39.05, east: -84.37, west: -84.62 },
+    crimeAdapterId: 'cincinnati-open-data',
+  },
+  'dallas': {
+    slug: 'dallas',
+    name: 'Dallas',
+    timezone: 'America/Chicago',
+    locale: 'en-US',
+    mapCenter: { lat: 32.7767, lng: -96.797 },
+    mapBounds: { north: 33.02, south: 32.62, east: -96.55, west: -97.0 },
+    crimeAdapterId: 'dallas-open-data',
+  },
   'tokyo': {
     slug: 'tokyo',
     name: 'Tokyo',
@@ -92,7 +119,17 @@ export function getAllCityEntries(): CityEntry[] {
 }
 
 export function getCrimeAdapterIdForSlug(slug: string): string {
-  return CITIES[slug]?.crimeAdapterId ?? '';
+  const entry = CITIES[slug] || CITIES[stripCountrySuffix(slug)];
+  return entry?.crimeAdapterId || '';
+}
+
+/**
+ * Strip a trailing 2-letter country code suffix (e.g. "san-francisco-us" → "san-francisco").
+ * Returns the input unchanged if it doesn't match the pattern.
+ */
+function stripCountrySuffix(slug: string): string {
+  const match = slug.match(/^(.+)-[a-z]{2}$/);
+  return match ? match[1] : slug;
 }
 
 export function toSlug(name: string): string {

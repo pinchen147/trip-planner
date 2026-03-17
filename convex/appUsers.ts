@@ -106,6 +106,23 @@ export const ensureCurrentUserProfile = mutation({
   }
 });
 
+export const deleteMyProfile = mutation({
+  args: {},
+  returns: v.object({ deleted: v.boolean() }),
+  handler: async (ctx) => {
+    const userId = await requireCurrentUserId(ctx);
+    const profile = await ctx.db
+      .query('userProfiles')
+      .withIndex('by_user_id', (q) => q.eq('userId', userId))
+      .first();
+    if (!profile) {
+      return { deleted: false };
+    }
+    await ctx.db.delete(profile._id);
+    return { deleted: true };
+  }
+});
+
 export const getCurrentUserProfile = query({
   args: {},
   returns: v.union(v.null(), userProfileResponseValidator),

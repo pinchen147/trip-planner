@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import ical from 'node-ical';
@@ -275,7 +274,7 @@ export async function updateSourcePayload(sourceId, input) {
     throw new Error('CONVEX_URL is missing. Configure Convex to persist global sources.');
   }
 
-  const patch = {};
+  const patch: Record<string, string> = {};
 
   if (typeof input?.label === 'string') {
     patch.label = cleanText(input.label);
@@ -1072,7 +1071,7 @@ async function saveRssSeenBySourceUrlToEventsCache(rssStateBySourceUrl) {
     return;
   }
 
-  let payload = {
+  let payload: { meta: Record<string, any>; events: any[]; places: any[] } = {
     meta: {},
     events: [],
     places: []
@@ -1189,7 +1188,7 @@ async function syncEventsFromSources({ eventSources, rssFallbackStateBySourceUrl
               day: 'numeric',
               hour: 'numeric',
               minute: '2-digit',
-              timeZone: 'America/Los_Angeles'
+              timeZone: 'UTC'
             })
           : '';
 
@@ -1842,7 +1841,7 @@ async function saveSourceSyncStatus(sources, errors, syncedAt, rssStateBySourceU
     .map((source) => {
       const sourceUrlKey = buildRssSourceStateKey(source.url);
       const rssStateJson = serializeRssSeenState(rssStateBySourceUrl?.[sourceUrlKey]);
-      const patch = {
+      const patch: Record<string, string> = {
         sourceId: source.id,
         lastSyncedAt: syncedAt,
         lastError: firstErrorBySource.get(source.id) || ''
@@ -1856,7 +1855,9 @@ async function saveSourceSyncStatus(sources, errors, syncedAt, rssStateBySourceU
   await Promise.allSettled(updateTasks);
 }
 
-function createIngestionError({ sourceType, sourceId, sourceUrl, eventUrl, stage, message }) {
+function createIngestionError({ sourceType, sourceId, sourceUrl, eventUrl = '', stage, message }: {
+  sourceType: string; sourceId: string; sourceUrl: string; eventUrl?: string; stage: string; message: string;
+}) {
   return {
     sourceType,
     sourceId: cleanText(sourceId),
@@ -2213,8 +2214,9 @@ async function loadGeocodeCacheMap() {
 
       const map = new Map();
       for (const [addressKey, coordinates] of Object.entries(parsed || {})) {
-        const lat = toCoordinateNumber(coordinates?.lat);
-        const lng = toCoordinateNumber(coordinates?.lng);
+        const coords = coordinates as Record<string, unknown> | null;
+        const lat = toCoordinateNumber(coords?.lat);
+        const lng = toCoordinateNumber(coords?.lng);
 
         if (isFiniteCoordinate(lat) && isFiniteCoordinate(lng)) {
           map.set(addressKey, { lat, lng });

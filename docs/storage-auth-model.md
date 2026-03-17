@@ -72,12 +72,31 @@ Auth is handled by `@convex-dev/auth` with Resend as the email provider:
 
 ### Dev Bypass
 
+> **⚠️ CRITICAL PRODUCTION WARNING ⚠️**
+>
+> The `DEV_BYPASS_AUTH = true` flag is currently **ENABLED** in three files. This completely disables authentication and must be set to `false` before any production deployment:
+>
+> | File | Line | Current Value |
+> |------|------|---------------|
+> | `middleware.ts` | 18 | `true` |
+> | `convex/authz.ts` | 5 | `true` |
+> | `lib/request-auth.ts` | 5 | `true` |
+>
+> **All three files must be updated together.** Partial updates will cause inconsistent auth behavior.
+
 A temporary `DEV_BYPASS_AUTH = true` flag exists in three files:
 - `convex/authz.ts` -- bypasses userId extraction
 - `lib/request-auth.ts` -- bypasses token verification
 - `middleware.ts` -- skips auth redirects
 
 When enabled, all requests are treated as authenticated with a hardcoded `dev-bypass` userId.
+
+**Production Deployment Checklist:**
+- [ ] Set `DEV_BYPASS_AUTH = false` in `middleware.ts:18`
+- [ ] Set `DEV_BYPASS_AUTH = false` in `convex/authz.ts:5`
+- [ ] Set `DEV_BYPASS_AUTH = false` in `lib/request-auth.ts:5`
+- [ ] Deploy Convex functions (`npx convex deploy`)
+- [ ] Verify auth redirects work on `/dashboard` when logged out
 
 ### Authorization Guards
 

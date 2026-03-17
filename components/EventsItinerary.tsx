@@ -1,11 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTrip } from '@/components/providers/TripProvider';
-import { formatDateDayMonth } from '@/lib/helpers';
 import { parseEventTimeRange } from '@/lib/planner-helpers';
 import { getSafeExternalHref } from '@/lib/security';
 
@@ -45,10 +45,31 @@ function EventsItinerarySkeleton() {
 
 export default function EventsItinerary() {
   const {
-    selectedDate, showAllEvents, setShowAllEvents,
+    showAllEvents, setShowAllEvents,
     visibleEvents, travelReadyCount, addEventToDayPlan,
-    isInitializing, timezone
+    isInitializing,
   } = useTrip();
+
+  const conflictSet = useMemo(() => {
+    const conflicts = new Set<string>();
+    const ranges = visibleEvents.map((e) => ({
+      key: e.eventUrl,
+      range: parseEventTimeRange(e.startDateTimeText),
+    }));
+    for (let i = 0; i < ranges.length; i++) {
+      const a = ranges[i];
+      if (!a.range) continue;
+      for (let j = i + 1; j < ranges.length; j++) {
+        const b = ranges[j];
+        if (!b.range) continue;
+        if (a.range.startMinutes < b.range.endMinutes && a.range.endMinutes > b.range.startMinutes) {
+          conflicts.add(a.key);
+          conflicts.add(b.key);
+        }
+      }
+    }
+    return conflicts;
+  }, [visibleEvents]);
 
   if (isInitializing) {
     return <EventsItinerarySkeleton />;
@@ -62,7 +83,7 @@ export default function EventsItinerary() {
             className="m-0 text-sm font-semibold"
             style={{ fontFamily: "var(--font-space-grotesk, 'Space Grotesk', sans-serif)" }}
           >
-            Events {selectedDate ? `· ${formatDateDayMonth(selectedDate, timezone)}` : ''}
+            Events
           </h2>
           <div className="flex gap-1.5 items-center mt-1">
             <ToggleGroup
@@ -89,12 +110,7 @@ export default function EventsItinerary() {
             const location = event.address || event.locationText || 'Location not listed';
             const time = event.startDateTimeText || 'Time not listed';
             const safeEventUrl = getSafeExternalHref(event.eventUrl);
-            const eventRange = parseEventTimeRange(event.startDateTimeText);
-            const hasConflict = eventRange && visibleEvents.some((other) => {
-              if (other.eventUrl === event.eventUrl) return false;
-              const otherRange = parseEventTimeRange(other.startDateTimeText);
-              return otherRange && eventRange.startMinutes < otherRange.endMinutes && eventRange.endMinutes > otherRange.startMinutes;
-            });
+            const hasConflict = conflictSet.has(event.eventUrl);
             return (
               <Card className={`p-3.5 hover:border-accent-border hover:shadow-[0_0_0_3px_var(--color-accent-glow)] ${hasConflict ? 'border-warning-border bg-warning-light' : ''}`} key={event.eventUrl}>
                 <h3 className="m-0 mb-1.5 text-[0.92rem] font-semibold leading-snug">{event.name}</h3>

@@ -1,10 +1,47 @@
 # Expansion Plan: Trip Planner Multi-Region Platform
 
-> **Last Updated:** 2026-03-15
+> **Last Updated:** 2026-03-16
 >
 > Comprehensive analysis of technical, product, and design work for extending Trip Planner across US cities, Europe, and other global regions.
 >
-> **Status:** Many items in this plan have been implemented (multi-city data model, city auto-provisioning, per-city crime adapters, GDPR cookie consent, TripSelector, CityPickerModal). This document remains relevant for items still in progress (i18n, mobile, full GDPR compliance, additional crime data adapters).
+> **Status:** Many items in this plan have been implemented. See the Implementation Progress section below for current status.
+
+---
+
+## Implementation Progress
+
+### Completed Items
+
+- [x] Multi-city data model (`cities`, `trips` tables with `legs[]` array)
+- [x] City auto-provisioning on trip creation (`POST /api/trips`)
+- [x] Per-city crime adapters (SF, NYC, LA, Chicago via Socrata)
+- [x] TripSelector dropdown for trip/city switching
+- [x] CityPickerModal with Google Places search
+- [x] Cookie consent banner UI (cosmetic only - see note below)
+- [x] Multi-leg trip support in dashboard
+- [x] City registry with 8 cities (`lib/city-registry.ts`)
+- [x] Per-leg timezone resolution from city table
+
+### In Progress
+
+- [ ] Full GDPR compliance (consent enforcement, data portability, right to erasure)
+- [ ] UK crime adapter (`data.police.uk`)
+- [ ] Timezone threading through all date formatters
+- [ ] Remove hardcoded SF references from branding
+
+### Not Started
+
+- [ ] i18n with `next-intl`
+- [ ] Locale-aware units (km/mi, 24h/12h)
+- [ ] Mobile app (React Native / Expo)
+- [ ] Aggregate safety adapters (Berlin, Paris, Sydney)
+- [ ] Ticketmaster Discovery API integration
+- [ ] Source marketplace UI
+- [ ] Privacy policy page
+
+### Known Issues
+
+> **Cookie Consent Not Enforced:** The cookie consent banner records user preference but NO features currently read this value. Analytics loads unconditionally. See [cookie-consent.md](./features/cookie-consent.md) for details.
 
 ---
 

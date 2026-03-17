@@ -322,14 +322,14 @@ export function DateRangePicker({
           style={{
             fontFamily: mono,
             fontSize: triggerFontSize || 11,
-            color: startDate ? (triggerColor || '#a3a3a3') : '#3a3a3a',
+            color: startDate ? (triggerColor || '#F5F5F5') : '#F5F5F5',
             borderBottom: open && phase === 'start' ? '2px solid #00E87B' : '2px solid transparent',
           }}
         >
           {!hideIcon && <Calendar size={12} style={{ color: '#525252', flexShrink: 0 }} />}
           {startDate ? formatDisplay(startDate) : startPlaceholder}
         </button>
-        <span style={{ color: '#333', fontSize: triggerFontSize || 11, fontFamily: mono, userSelect: 'none' }}>—</span>
+        <span style={{ color: '#F5F5F5', fontSize: triggerFontSize || 11, fontFamily: mono, userSelect: 'none' }}>—</span>
         <button
           type="button"
           onClick={() => open && phase === 'end' ? setOpen(false) : handleOpen('end')}
@@ -337,7 +337,7 @@ export function DateRangePicker({
           style={{
             fontFamily: mono,
             fontSize: triggerFontSize || 11,
-            color: endDate ? (triggerColor || '#a3a3a3') : '#3a3a3a',
+            color: endDate ? (triggerColor || '#F5F5F5') : '#F5F5F5',
             borderBottom: open && phase === 'end' ? '2px solid #00E87B' : '2px solid transparent',
           }}
         >

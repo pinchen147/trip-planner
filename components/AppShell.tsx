@@ -1,5 +1,6 @@
 'use client';
 
+import type React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import MapPanel from '@/components/MapPanel';
 import StatusBar from '@/components/StatusBar';
@@ -7,19 +8,19 @@ import TripSelector from '@/components/TripSelector';
 import { useTrip } from '@/components/providers/TripProvider';
 import Link from 'next/link';
 import {
-  Calendar, Compass, LayoutGrid, MapPin, Navigation, RefreshCw, Settings
+  Calendar, Compass, LayoutGrid, Navigation, RefreshCw, Settings
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'planning', icon: Navigation, label: 'PLANNING' },
-  { id: 'spots', icon: Compass, label: 'SPOTS' },
+  { id: 'sources', icon: Compass, label: 'SOURCES' },
   { id: 'calendar', icon: Calendar, label: 'CALENDAR' },
   { id: 'config', icon: Settings, label: 'CONFIG' }
 ];
 
-const MAP_TABS = new Set(['planning', 'spots']);
+const MAP_TABS = new Set(['planning']);
 
-export default function AppShell({ children }) {
+export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const {
@@ -74,8 +75,10 @@ export default function AppShell({ children }) {
           </nav>
         </div>
         <div className="flex items-center gap-3 shrink-0 topbar-actions-responsive">
-          {/* Trip / City Selector */}
-          <TripSelector />
+          {/* Trip / City Selector — hidden on mobile via CSS */}
+          <div className="topbar-trip-selector">
+            <TripSelector />
+          </div>
           {/* Sync Button */}
           <button
             type="button"

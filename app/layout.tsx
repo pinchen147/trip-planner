@@ -1,9 +1,9 @@
 import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
-import { Analytics } from '@vercel/analytics/next';
 import { ConvexAuthNextjsServerProvider } from '@convex-dev/auth/nextjs/server';
 import Script from 'next/script';
 import ConvexClientProvider from '@/components/providers/ConvexClientProvider';
 import CookieConsent from '@/components/CookieConsent';
+import ConsentAnalytics from '@/components/ConsentAnalytics';
 import './globals.css';
 
 const inter = Inter({
@@ -60,7 +60,7 @@ export default function RootLayout({ children }) {
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </ConvexAuthNextjsServerProvider>
         <CookieConsent />
-        <Analytics />
+        <ConsentAnalytics />
         {buyMeACoffeeId ? (
           <Script
             id="buymeacoffee-widget"

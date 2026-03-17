@@ -110,6 +110,7 @@ export const upsertSpots = mutation({
 
     for (const row of existingRows) {
       if (!keepIds.has(row.id)) {
+        if (row.sourceId === 'ai-parse') continue;
         const nextMissedSyncCount = (Number(row.missedSyncCount) || 0) + 1;
         const isDeleted = nextMissedSyncCount >= missedSyncThreshold;
 
@@ -145,11 +146,13 @@ export const upsertSpots = mutation({
       .withIndex('by_key', (q) => q.eq('key', metaKey))
       .first();
 
+    // syncMeta schema uses generic field names shared with events:
+    // "calendars" stores source URLs, "eventCount" stores item count
     const nextMeta = {
       key: metaKey,
       syncedAt: args.syncedAt,
       calendars: args.sourceUrls,
-      eventCount: args.spots.length
+      eventCount: args.spots.length,
     };
 
     if (existingMeta) {

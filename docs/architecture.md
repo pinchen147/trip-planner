@@ -1379,6 +1379,92 @@ graph LR
 
 ---
 
+## 11. Testing Strategy & Roadmap
+
+### Current Test Coverage
+
+The project uses Node.js built-in test runner (`node:test`) for backend tests. Most tests are **source-code-scanning tests** that read `.tsx` files as strings and assert on content, rather than behavioral tests.
+
+| Test Category | Files | Coverage |
+|---------------|-------|----------|
+| Crime city registry | `lib/crime-cities.test.mjs` | Field completeness, slug matching |
+| Auth guards | `lib/api-guards.test.mjs`, `convex/authz.test.mjs` | Guard function behavior |
+| Owner role resolution | `convex/owner-role.test.mjs` | Allowlist parsing |
+| Planner API | `lib/planner-api.test.mjs` | Room code normalization |
+| Pair API | `lib/pair-api.test.mjs` | Action body parsing |
+| Sync engine | `lib/events.test.mjs`, `lib/events.rss.test.mjs` | iCal parsing, SSRF rejection |
+| Dashboard | `lib/dashboard.test.mjs` | Source code assertions |
+| TripProvider | `lib/trip-provider-bootstrap.test.mjs` | Source code assertions |
+
+### Test Commands
+
+```bash
+# Run all backend tests
+bun run test:backend
+
+# Run specific test file
+node --test lib/crime-cities.test.mjs
+
+# Run with verbose output
+node --test --test-reporter spec lib/*.test.mjs
+```
+
+### Current Gaps
+
+| Area | Gap | Impact |
+|------|-----|--------|
+| Component tests | No React component rendering tests | UI regressions undetected |
+| Integration tests | No E2E tests for user flows | Cross-component bugs undetected |
+| API route tests | No HTTP-level API tests | Request/response contract drift |
+| Convex mutations | No mutation behavior tests | Database logic untested |
+| TypeScript | `lib/events.ts` has `@ts-nocheck` | Type errors hidden |
+
+### Testing Roadmap
+
+**Phase 1: Foundation (Recommended First)**
+- [ ] Add Vitest for component testing
+- [ ] Create test utilities for mocking TripProvider context
+- [ ] Add tests for pure helper functions (`lib/helpers.ts`, `lib/planner-helpers.ts`)
+- [ ] Remove `@ts-nocheck` from `lib/events.ts` and fix type errors
+
+**Phase 2: Component Tests**
+- [ ] Test `PlannerItinerary` drag-and-drop behavior
+- [ ] Test `MapPanel` filter chip interactions
+- [ ] Test `TripSelector` trip/city switching
+- [ ] Test `CityPickerModal` search and selection
+
+**Phase 3: Integration Tests**
+- [ ] Add Playwright for E2E testing
+- [ ] Test sign-in → dashboard → trip creation flow
+- [ ] Test planner → calendar export flow
+- [ ] Test pair room creation and joining
+
+**Phase 4: API Contract Tests**
+- [ ] Add OpenAPI spec generation
+- [ ] Test all 14 API endpoints with mock data
+- [ ] Add rate limit verification tests
+
+### Recommended Test Setup
+
+```bash
+# Add testing dependencies
+bun add -d vitest @testing-library/react @testing-library/jest-dom
+bun add -d @playwright/test
+```
+
+```json
+// package.json additions
+{
+  "scripts": {
+    "test": "vitest",
+    "test:e2e": "playwright test",
+    "test:backend": "node --test lib/*.test.mjs convex/*.test.mjs"
+  }
+}
+```
+
+---
+
 ## Appendix: Key Data Structures
 
 ### PlanItem

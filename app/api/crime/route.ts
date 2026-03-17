@@ -61,33 +61,50 @@ function buildIncidentWhereClause(
 ) {
   const clauses = [
     `${dateFilterField} >= ${sqlStringLiteral(sinceDateISO)}`,
-    `${fields.latitude} IS NOT NULL`,
-    `${fields.longitude} IS NOT NULL`,
   ];
+  if (!isNestedField(fields.latitude)) {
+    clauses.push(`${fields.latitude} IS NOT NULL`);
+    clauses.push(`${fields.longitude} IS NOT NULL`);
+  }
   if (excludedCategories.length > 0) {
     const excluded = excludedCategories.map(sqlStringLiteral).join(', ');
     clauses.push(`${fields.category} NOT IN (${excluded})`);
   }
-  if (bounds) {
+  if (bounds && !isNestedField(fields.latitude)) {
     clauses.push(`${fields.latitude} >= ${bounds.south} AND ${fields.latitude} <= ${bounds.north}`);
     clauses.push(`${fields.longitude} >= ${bounds.west} AND ${fields.longitude} <= ${bounds.east}`);
   }
   return clauses.join(' AND ');
 }
 
+function resolveField(row: any, path: string): unknown {
+  if (!path) return undefined;
+  if (!path.includes('.')) return row?.[path];
+  return path.split('.').reduce((obj, key) => obj?.[key], row);
+}
+
+function selectFieldRoot(field: string): string {
+  const dot = field.indexOf('.');
+  return dot === -1 ? field : field.slice(0, dot);
+}
+
+function isNestedField(field: string): boolean {
+  return field.includes('.');
+}
+
 function normalizeIncident(row: any, fields: CrimeCityFieldMap, sinceComparableISO: string) {
-  const lat = Number(row?.[fields.latitude]);
-  const lng = Number(row?.[fields.longitude]);
+  const lat = Number(resolveField(row, fields.latitude));
+  const lng = Number(resolveField(row, fields.longitude));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const incidentDatetime = String(row?.[fields.datetime] || '');
+  const incidentDatetime = String(resolveField(row, fields.datetime) || '');
   if (incidentDatetime && incidentDatetime < sinceComparableISO) return null;
   return {
     lat,
     lng,
     incidentDatetime,
-    incidentCategory: String(row?.[fields.category] || ''),
-    incidentSubcategory: fields.subcategory ? String(row?.[fields.subcategory] || '') : '',
-    neighborhood: fields.neighborhood ? String(row?.[fields.neighborhood] || '') : ''
+    incidentCategory: String(resolveField(row, fields.category) || ''),
+    incidentSubcategory: fields.subcategory ? String(resolveField(row, fields.subcategory) || '') : '',
+    neighborhood: fields.neighborhood ? String(resolveField(row, fields.neighborhood) || '') : ''
   };
 }
 
@@ -138,11 +155,12 @@ export async function GET(request: Request) {
 
   const datasetUrl = `https://${cityConfig.host}/resource/${cityConfig.datasetId}.json`;
   const queryUrl = new URL(datasetUrl);
-  const selectFields = [
-    fields.datetime, fields.category,
-    fields.subcategory, fields.neighborhood,
-    fields.latitude, fields.longitude
-  ].filter(Boolean).join(',');
+  const selectFieldNames = new Set(
+    [fields.datetime, fields.category, fields.subcategory, fields.neighborhood, fields.latitude, fields.longitude]
+      .filter(Boolean)
+      .map(selectFieldRoot)
+  );
+  const selectFields = [...selectFieldNames].join(',');
   queryUrl.searchParams.set('$select', selectFields);
   queryUrl.searchParams.set('$where', whereClause);
   queryUrl.searchParams.set('$order', `${fields.datetime} DESC`);

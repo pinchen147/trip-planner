@@ -3,7 +3,7 @@ import LandingContent from './landing/LandingContent';
 export const metadata = {
   title: 'Trip Planner — Turn 50 Open Tabs Into One Trip Plan',
   description:
-    "See where events are, when they conflict, where it's safe, and plan your trip with friends. Live crime heatmaps for SF, NYC, LA, and Chicago. Curated spots and Google Calendar export.",
+    "See where events are, when they conflict, where it's safe, and plan your trip with friends. Live crime heatmaps from official city open data. Curated spots and Google Calendar export.",
   alternates: {
     canonical: 'https://trip.ianhsiao.me',
   },
@@ -17,7 +17,7 @@ const jsonLd = {
       name: 'Trip Planner',
       url: 'https://trip.ianhsiao.me',
       description:
-        'Trip Planner consolidates city events from Luma and Beehiiv, curated restaurant and cafe spots, and live crime heatmaps onto one interactive Google Map. Covers SF, NYC, LA, and Chicago with official open data. Plan day-by-day itineraries, share plans with travel companions, and export to Google Calendar. Free, open source, built with Next.js 15.',
+        'Trip Planner consolidates city events from Luma and Beehiiv, curated restaurant and cafe spots, and live crime heatmaps onto one interactive Google Map. Covers 7+ US cities with official open data. Plan day-by-day itineraries, share plans with travel companions, and export to Google Calendar. Free, open source, built with Next.js 15.',
       applicationCategory: 'TravelApplication',
       operatingSystem: 'Web',
       offers: {
@@ -32,7 +32,7 @@ const jsonLd = {
       },
       featureList: [
         'Interactive Google Map with color-coded event and spot pins',
-        'Live crime heatmap overlay from city open data (SF, NYC, LA, Chicago)',
+        'Live crime heatmap overlay from official city open data portals',
         'Day-by-day drag-and-drop trip planner',
         'Shared pair planner for travel companions',
         'Google Calendar and iCal export',
@@ -52,7 +52,7 @@ const jsonLd = {
       name: 'Trip Planner — Turn 50 Open Tabs Into One Trip Plan',
       url: 'https://trip.ianhsiao.me',
       description:
-        "Plan your trip with events, curated spots, and live crime heatmaps on one interactive map. Covers SF, NYC, LA, and Chicago.",
+        "Plan your trip with events, curated spots, and live crime heatmaps on one interactive map. Covers 7+ US cities with official open data.",
       speakable: {
         '@type': 'SpeakableSpecification',
         cssSelector: ['h1', '.hero-description', '.faq-answer'],
@@ -74,7 +74,7 @@ const jsonLd = {
           name: 'How does the crime heatmap work?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'The crime heatmap pulls publicly available incident data from official city open data portals — including SFPD, NYPD, LAPD, and Chicago PD datasets. It overlays this data directly on the trip map so you can see which blocks had recent incidents before choosing restaurants or planning evening walks.',
+            text: 'The crime heatmap pulls publicly available incident data from official city open data portals across multiple US cities. It overlays this data directly on the trip map so you can see which blocks had recent incidents before choosing restaurants or planning evening walks.',
           },
         },
         {
@@ -114,7 +114,7 @@ const jsonLd = {
           name: 'Which neighborhoods should I avoid?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Trip Planner helps you make informed decisions by showing a live crime heatmap sourced from official city police data. Toggle the heatmap overlay on the map to check safety around any event or restaurant before committing to your plans. Crime data is currently available for San Francisco, New York City, Los Angeles, and Chicago.',
+            text: 'Trip Planner helps you make informed decisions by showing a live crime heatmap sourced from official city police data. Toggle the heatmap overlay on the map to check safety around any event or restaurant before committing to your plans. Crime data is available for San Francisco, New York City, Los Angeles, Chicago, Seattle, Cincinnati, and Dallas.',
           },
         },
       ],

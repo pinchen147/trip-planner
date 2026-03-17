@@ -1,4 +1,4 @@
-import type { PlaceTag } from './types';
+import type { PlaceTag } from './types.ts';
 
 const MINUTES_IN_DAY = 24 * 60;
 const MIN_PLAN_BLOCK_MINUTES = 30;
@@ -109,7 +109,7 @@ export function buildCalendarGridDates(anchorISO: string): string[] {
   return dates;
 }
 
-export function formatDate(isoDate: string, tz = 'America/Los_Angeles'): string {
+export function formatDate(isoDate: string, tz = 'UTC'): string {
   const normalizedDateISO = normalizeDateKey(isoDate);
   if (!normalizedDateISO) return isoDate;
   const parsedDate = new Date(`${normalizedDateISO}T00:00:00`);
@@ -117,7 +117,7 @@ export function formatDate(isoDate: string, tz = 'America/Los_Angeles'): string 
   return parsedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
 }
 
-export function formatDateWeekday(isoDate: string, tz = 'America/Los_Angeles'): string {
+export function formatDateWeekday(isoDate: string, tz = 'UTC'): string {
   const normalizedDateISO = normalizeDateKey(isoDate);
   if (!normalizedDateISO) return isoDate;
   const parsedDate = new Date(`${normalizedDateISO}T00:00:00`);
@@ -125,7 +125,7 @@ export function formatDateWeekday(isoDate: string, tz = 'America/Los_Angeles'): 
   return parsedDate.toLocaleDateString(undefined, { weekday: 'short', timeZone: tz });
 }
 
-export function formatDateDayMonth(isoDate: string, tz = 'America/Los_Angeles'): string {
+export function formatDateDayMonth(isoDate: string, tz = 'UTC'): string {
   const normalizedDateISO = normalizeDateKey(isoDate);
   if (!normalizedDateISO) return isoDate;
   const parsedDate = new Date(`${normalizedDateISO}T00:00:00`);
@@ -133,7 +133,7 @@ export function formatDateDayMonth(isoDate: string, tz = 'America/Los_Angeles'):
   return parsedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: tz });
 }
 
-export function formatMonthYear(isoDate: string, tz = 'America/Los_Angeles'): string {
+export function formatMonthYear(isoDate: string, tz = 'UTC'): string {
   const normalizedDateISO = normalizeDateKey(isoDate);
   if (!normalizedDateISO) return isoDate;
   const parsedDate = new Date(`${normalizedDateISO}T00:00:00`);
@@ -141,7 +141,7 @@ export function formatMonthYear(isoDate: string, tz = 'America/Los_Angeles'): st
   return parsedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: tz });
 }
 
-export function formatDayOfMonth(isoDate: string, tz = 'America/Los_Angeles'): string {
+export function formatDayOfMonth(isoDate: string, tz = 'UTC'): string {
   const normalizedDateISO = normalizeDateKey(isoDate);
   if (!normalizedDateISO) return isoDate;
   const parsedDate = new Date(`${normalizedDateISO}T00:00:00`);
@@ -149,8 +149,12 @@ export function formatDayOfMonth(isoDate: string, tz = 'America/Los_Angeles'): s
   return new Intl.DateTimeFormat('en-US', { day: 'numeric', timeZone: tz }).format(parsedDate);
 }
 
-export function formatDistance(totalMeters: number): string {
+export function formatDistance(totalMeters: number, unit: 'mi' | 'km' = 'mi'): string {
   if (!Number.isFinite(totalMeters) || totalMeters <= 0) return 'n/a';
+  if (unit === 'km') {
+    const km = totalMeters / 1000;
+    return km >= 10 ? `${km.toFixed(0)} km` : `${km.toFixed(1)} km`;
+  }
   const miles = totalMeters / 1609.344;
   return miles >= 10 ? `${miles.toFixed(0)} mi` : `${miles.toFixed(1)} mi`;
 }
@@ -187,17 +191,23 @@ export function snapMinutes(value: number): number {
   return Math.round(value / PLAN_SNAP_MINUTES) * PLAN_SNAP_MINUTES;
 }
 
-export function formatMinuteLabel(minutesValue: number): string {
+export function formatMinuteLabel(minutesValue: number, use24h = false): string {
   const minutes = clampMinutes(minutesValue, 0, MINUTES_IN_DAY);
   const hour24 = Math.floor(minutes / 60);
   const minute = minutes % 60;
+  if (use24h) {
+    return `${hour24.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  }
   const period = hour24 >= 12 ? 'PM' : 'AM';
   const hour12 = hour24 % 12 || 12;
   return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
 }
 
-export function formatHour(hourValue: number): string {
+export function formatHour(hourValue: number, use24h = false): string {
   const hour = Number(hourValue);
+  if (use24h) {
+    return `${hour.toString().padStart(2, '0')}:00`;
+  }
   const period = hour >= 12 ? 'PM' : 'AM';
   const hour12 = hour % 12 || 12;
   return `${hour12} ${period}`;

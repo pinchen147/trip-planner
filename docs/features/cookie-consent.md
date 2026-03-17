@@ -2,6 +2,20 @@
 
 **Document Basis:** current code at time of generation.
 
+**Last Updated:** 2026-03-16
+
+---
+
+> **⚠️ GDPR COMPLIANCE WARNING ⚠️**
+>
+> **The cookie consent banner is currently COSMETIC ONLY.** The consent value is recorded to localStorage but is **never read or enforced** by any other module:
+>
+> - Vercel Analytics (`<Analytics />`) loads unconditionally regardless of consent
+> - Crime data API calls proceed without checking consent
+> - No features gate behavior on the `cookie-consent` localStorage value
+>
+> **Before EU expansion**, consent enforcement must be implemented. See [Expansion Plan - GDPR Section](../expansion-plan.md#14-gdpr--data-privacy--european-expansion) for requirements.
+
 ---
 
 ## 1. Summary
@@ -24,6 +38,17 @@ The Cookie Consent Banner is a GDPR-oriented UI component that displays a fixed 
 - Per-category consent (analytics, functional, marketing).
 - Server-side consent enforcement.
 - GDPR Article 20/17 endpoints (data portability, right to erasure).
+
+### Consent Enforcement Roadmap
+
+To achieve GDPR compliance, implement these changes:
+
+1. **Gate Analytics**: Conditionally render `<Analytics />` in `app/layout.tsx` based on consent value
+2. **Gate Crime Data**: Check consent before calling `/api/crime` in `TripProvider.tsx`
+3. **Add Privacy Policy**: Link to a `/privacy` page from the consent banner
+4. **Add Expiration**: Re-prompt for consent every 12 months (store timestamp with consent)
+5. **Implement Data Portability**: Add `/api/me/export` endpoint (GDPR Article 20)
+6. **Implement Right to Erasure**: Add `/api/me/delete` endpoint (GDPR Article 17)
 
 ---
 

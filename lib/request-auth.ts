@@ -18,7 +18,7 @@ function createConvexClient() {
   return new ConvexHttpClient(convexUrl);
 }
 
-function createConvexClientWithToken(token) {
+function createConvexClientWithToken(token: string) {
   const client = createConvexClient();
   if (client && token) {
     client.setAuth(token);

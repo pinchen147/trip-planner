@@ -2,6 +2,8 @@
 
 Document Basis: current code at time of generation.
 
+**Last Updated:** 2026-03-16
+
 ---
 
 ## 1. Summary
@@ -26,6 +28,24 @@ The Sync Engine is the server-side data ingestion pipeline that fetches events a
 - `syncSpotsFromSources()` is a no-op stub -- returns empty results (`lib/events.ts:1192-1198`)
 - Scheduled/cron-based sync (sync is triggered manually or on page load)
 - Webhook-based real-time source updates
+
+> **⚠️ KNOWN LIMITATION: Spot Sync is Not Implemented ⚠️**
+>
+> The function `syncSpotsFromSources()` at `lib/events.ts:1192-1198` is a **no-op stub** that always returns:
+> ```javascript
+> { places: [], sourceUrls: [...], errors: [] }
+> ```
+>
+> **Current spot data sources:**
+> - Static JSON file: `data/static-places.json` (loaded via `loadStaticPlaces()`)
+> - Existing Convex `spots` table entries
+> - AI text parsing via `/api/ai/parse` (creates spots from pasted content)
+>
+> **To implement spot source sync:**
+> 1. Add Firecrawl extraction logic similar to RSS event extraction
+> 2. Define spot-specific field mapping from scraped data
+> 3. Add spot schema validation in `CONVEX_SPOT_FIELDS`
+> 4. Call `upsertSpots` mutation with extracted data
 
 ---
 

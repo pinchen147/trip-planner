@@ -21,6 +21,63 @@ export type CrimeCityConfig = {
 };
 
 const CRIME_CITIES: Record<string, CrimeCityConfig> = {
+  seattle: {
+    slug: 'seattle',
+    label: 'Seattle',
+    host: 'data.seattle.gov',
+    datasetId: 'tazs-3rd5',
+    fields: {
+      datetime: 'offense_date',
+      category: 'offense_sub_category',
+      subcategory: 'nibrs_offense_code_description',
+      neighborhood: 'precinct',
+      latitude: 'latitude',
+      longitude: 'longitude',
+    },
+    excludedCategories: ['999', 'NOT_A_CRIME'],
+    appTokenEnvVar: 'SEATTLE_APP_TOKEN',
+    dateFilterField: 'offense_date',
+    providerName: 'Seattle Open Data',
+    portalBaseUrl: 'https://data.seattle.gov',
+  },
+  cincinnati: {
+    slug: 'cincinnati',
+    label: 'Cincinnati',
+    host: 'data.cincinnati-oh.gov',
+    datasetId: 'k59e-2pvf',
+    fields: {
+      datetime: 'date_from',
+      category: 'offense',
+      subcategory: 'ucr_group',
+      neighborhood: 'cpd_neighborhood',
+      latitude: 'latitude_x',
+      longitude: 'longitude_x',
+    },
+    excludedCategories: [],
+    appTokenEnvVar: 'CINCINNATI_APP_TOKEN',
+    dateFilterField: 'date_from',
+    providerName: 'Cincinnati Open Data',
+    portalBaseUrl: 'https://data.cincinnati-oh.gov',
+  },
+  dallas: {
+    slug: 'dallas',
+    label: 'Dallas',
+    host: 'www.dallasopendata.com',
+    datasetId: 'qv6i-rri7',
+    fields: {
+      datetime: 'date1',
+      category: 'offincident',
+      subcategory: 'nibrs_crime',
+      neighborhood: 'division',
+      latitude: 'geocoded_column.latitude',
+      longitude: 'geocoded_column.longitude',
+    },
+    excludedCategories: [],
+    appTokenEnvVar: 'DALLAS_APP_TOKEN',
+    dateFilterField: 'date1',
+    providerName: 'Dallas Open Data',
+    portalBaseUrl: 'https://www.dallasopendata.com',
+  },
   'san-francisco': {
     slug: 'san-francisco',
     label: 'San Francisco',
@@ -112,7 +169,17 @@ const CRIME_CITIES: Record<string, CrimeCityConfig> = {
 const DEFAULT_CITY_SLUG = 'san-francisco';
 
 export function getCrimeCityConfig(slug: string): CrimeCityConfig | undefined {
-  return CRIME_CITIES[slug];
+  if (CRIME_CITIES[slug]) return CRIME_CITIES[slug];
+  return CRIME_CITIES[stripCountrySuffix(slug)];
+}
+
+/**
+ * Strip a trailing 2-letter country code suffix (e.g. "san-francisco-us" → "san-francisco").
+ * Returns the input unchanged if it doesn't match the pattern.
+ */
+function stripCountrySuffix(slug: string): string {
+  const match = slug.match(/^(.+)-[a-z]{2}$/);
+  return match ? match[1] : slug;
 }
 
 export function getDefaultCrimeCitySlug(): string {
